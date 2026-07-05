@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/xakus/DSMS/panel/internal/agentclient"
+	"github.com/xakus/DSMS/panel/internal/alerts"
 	"github.com/xakus/DSMS/panel/internal/auth"
 	"github.com/xakus/DSMS/panel/internal/config"
 	"github.com/xakus/DSMS/panel/internal/crypto"
@@ -70,6 +71,8 @@ type Deps struct {
 	Agents *agentclient.Directory
 	// AgentClient — вызовы HTTP API агентов (df/volumes/prune).
 	AgentClient *agentclient.Client
+	// Alerts — движок алертов (FR-12); nil в тестах, где он не нужен.
+	Alerts *alerts.Engine
 }
 
 // NewRouter собирает chi-роутер: API + встроенная SPA.
@@ -149,6 +152,9 @@ func NewRouter(d Deps) http.Handler {
 			// --- disk usage / prune (FR-11) ---
 			r.Get("/system/df", h.systemDF)
 			r.Post("/system/prune", h.systemPrune)
+
+			// --- алерты (FR-12) ---
+			r.Get("/alerts", h.alertsList)
 
 			// --- реестры (FR-13) ---
 			r.Get("/registries", h.registries)

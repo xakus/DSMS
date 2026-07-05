@@ -19,7 +19,16 @@
     "events": "События",
     "resources": "Ресурсы",
     "disk": "Диск",
+    "alerts": "Алерты",
     "settings": "Настройки"
+  },
+  "alerts": {
+    "active": "Активные",
+    "history": "Журнал",
+    "rule": "Правило",
+    "message": "Сообщение",
+    "resolved": "Закрыт",
+    "filterRule": "Фильтр по правилу"
   },
   "resources": {
     "usedBy": "Используется",

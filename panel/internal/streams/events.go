@@ -25,8 +25,10 @@ type EventMsg struct {
 }
 
 // RunEvents запускает вечный цикл трансляции событий в hub.
+// onEvent (может быть nil) — дополнительный обработчик каждого события:
+// движок алертов ловит через него task failure (FR-12).
 // Блокирует до отмены ctx — вызывать в горутине из main.
-func RunEvents(ctx context.Context, src EventSource, sink LogSink) {
+func RunEvents(ctx context.Context, src EventSource, sink LogSink, onEvent func(events.Message)) {
 	for {
 		if ctx.Err() != nil {
 			return
@@ -49,6 +51,9 @@ func RunEvents(ctx context.Context, src EventSource, sink LogSink) {
 					Actor:  actor,
 					TS:     m.Time,
 				})
+				if onEvent != nil {
+					onEvent(m)
+				}
 			case err := <-errs:
 				if err != nil {
 					slog.Warn("docker events stream broken, reconnecting", "err", err)

@@ -63,6 +63,22 @@ func (b *ClusterBuffer) Latest(nodeID string) (Snapshot, bool) {
 	return r.buf[idx], true
 }
 
+// Latests возвращает последние снапшоты всех известных нод
+// (для периодических проверок алертов, FR-12).
+func (b *ClusterBuffer) Latests() map[string]Snapshot {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	out := make(map[string]Snapshot, len(b.nodes))
+	for id, r := range b.nodes {
+		if r.n == 0 {
+			continue
+		}
+		idx := (r.head - 1 + len(r.buf)) % len(r.buf)
+		out[id] = r.buf[idx]
+	}
+	return out
+}
+
 // Window возвращает снапшоты ноды от старых к новым (для графиков live-окна).
 func (b *ClusterBuffer) Window(nodeID string) []Snapshot {
 	b.mu.RLock()

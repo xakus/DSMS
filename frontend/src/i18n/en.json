@@ -19,7 +19,16 @@
     "events": "Events",
     "resources": "Resources",
     "disk": "Disk usage",
+    "alerts": "Alerts",
     "settings": "Settings"
+  },
+  "alerts": {
+    "active": "Active",
+    "history": "History",
+    "rule": "Rule",
+    "message": "Message",
+    "resolved": "Resolved",
+    "filterRule": "Filter by rule"
   },
   "resources": {
     "usedBy": "Used by",

@@ -163,6 +163,59 @@ type AuditEntry struct {
 	Details    string `json:"details"`
 }
 
+// InsertAlert пишет алерт в журнал (FR-12 3.12.3), возвращает id.
+func (s *Store) InsertAlert(rule, severity, objectType, objectID, message string, openedAt int64) (int64, error) {
+	res, err := s.db.Exec(
+		`INSERT INTO alerts (ts_opened, rule, severity, object_type, object_id, message)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		openedAt, rule, severity, objectType, objectID, message,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// ResolveAlert проставляет время закрытия алерта.
+func (s *Store) ResolveAlert(id, resolvedAt int64) error {
+	_, err := s.db.Exec(`UPDATE alerts SET ts_resolved = ? WHERE id = ?`, resolvedAt, id)
+	return err
+}
+
+// AlertHistoryEntry — запись журнала алертов.
+type AlertHistoryEntry struct {
+	ID         int64  `json:"id"`
+	Rule       string `json:"rule"`
+	Severity   string `json:"severity"`
+	ObjectType string `json:"object_type"`
+	ObjectID   string `json:"object_id"`
+	Message    string `json:"message"`
+	OpenedAt   int64  `json:"opened_at"`
+	ResolvedAt int64  `json:"resolved_at,omitempty"`
+}
+
+// AlertHistory возвращает журнал алертов, свежие первыми (3.12.4).
+func (s *Store) AlertHistory(limit int) ([]AlertHistoryEntry, error) {
+	rows, err := s.db.Query(
+		`SELECT id, rule, severity, COALESCE(object_type,''), COALESCE(object_id,''),
+		        COALESCE(message,''), ts_opened, COALESCE(ts_resolved, 0)
+		 FROM alerts ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AlertHistoryEntry{}
+	for rows.Next() {
+		var e AlertHistoryEntry
+		if err := rows.Scan(&e.ID, &e.Rule, &e.Severity, &e.ObjectType, &e.ObjectID,
+			&e.Message, &e.OpenedAt, &e.ResolvedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // AuditEntries возвращает журнал действий, свежие первыми (3.6.2).
 func (s *Store) AuditEntries(limit, offset int) ([]AuditEntry, error) {
 	rows, err := s.db.Query(

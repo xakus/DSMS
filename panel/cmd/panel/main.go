@@ -14,7 +14,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/docker/docker/api/types/events"
+
 	"github.com/xakus/DSMS/panel/internal/agentclient"
+	"github.com/xakus/DSMS/panel/internal/alerts"
 	"github.com/xakus/DSMS/panel/internal/api"
 	"github.com/xakus/DSMS/panel/internal/auth"
 	"github.com/xakus/DSMS/panel/internal/config"
@@ -25,6 +28,21 @@ import (
 	"github.com/xakus/DSMS/panel/internal/streams"
 	"github.com/xakus/DSMS/panel/internal/ws"
 )
+
+// wsNotifier — доставка алертов в WebSocket topic "alerts" (3.12.2).
+// v2 добавит Telegram/email реализации того же интерфейса alerts.Notifier.
+type wsNotifier struct {
+	hub *ws.Hub
+}
+
+// Notify рассылает алерт всем подписчикам topic=alerts.
+func (n wsNotifier) Notify(a alerts.Alert) {
+	n.hub.Broadcast("alerts", "", map[string]any{
+		"topic": "alerts", "id": a.ID, "rule": a.Rule, "severity": a.Severity,
+		"state": a.State, "object_type": a.ObjectType, "object_id": a.ObjectID,
+		"message": a.Message, "opened_at": a.OpenedAt, "resolved_at": a.ResolvedAt,
+	})
+}
 
 func main() {
 	// Структурированные JSON-логи в stdout (NFR-8).
@@ -88,6 +106,9 @@ func main() {
 		slog.Warn("DSMS_ENCRYPTION_KEY not set: registry credentials disabled")
 	}
 
+	// Движок алертов (FR-12): доставка в WS topic "alerts".
+	engine := alerts.NewEngine(db, wsNotifier{hub}, buf, docker)
+
 	router := api.NewRouter(api.Deps{
 		Cfg:      cfg,
 		Store:    db,
@@ -99,6 +120,7 @@ func main() {
 		// Справочник агентов + клиент их API (volumes/df/prune, FR-10/FR-11).
 		Agents:      agentclient.NewDirectory(),
 		AgentClient: agentclient.New(cfg.AgentToken, ""),
+		Alerts:      engine,
 	})
 
 	srv := &http.Server{
@@ -111,8 +133,22 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Лента Docker events → WS topic "events" (FR-06), с реконнектом (NFR-5).
-	go streams.RunEvents(ctx, docker, hub)
+	// Периодические проверки алертов: агент молчит, сервис degraded.
+	go engine.Run(ctx)
+
+	// Лента Docker events → WS "events" (FR-06) + алерт task_failed (FR-12).
+	go streams.RunEvents(ctx, docker, hub, func(m events.Message) {
+		if m.Type == "container" && m.Action == "die" {
+			if code := m.Actor.Attributes["exitCode"]; code != "" && code != "0" {
+				name := m.Actor.Attributes["com.docker.swarm.task.name"]
+				if name == "" {
+					name = m.Actor.Attributes["name"]
+				}
+				engine.Event("task_failed", "warning", "task", name,
+					"task "+name+" exited with code "+code)
+			}
+		}
+	})
 
 	go func() {
 		slog.Info("panel listening", "addr", cfg.Listen)

@@ -156,6 +156,10 @@ func (h *handlers) ingest(w http.ResponseWriter, r *http.Request) {
 	if h.Agents != nil {
 		h.Agents.Set(snap.NodeID, ipFromRemoteAddr(r.RemoteAddr))
 	}
+	// Оценка правил алертов на каждом батче (FR-12 3.12.1).
+	if h.Alerts != nil {
+		h.Alerts.Evaluate(snap)
+	}
 	// Живая рассылка подписчикам topic=metrics (разд. 4.2).
 	h.Hub.Broadcast("metrics", "", map[string]any{
 		"topic": "metrics",
@@ -238,6 +242,22 @@ func (h *handlers) nodes(w http.ResponseWriter, r *http.Request) {
 // websocket — апгрейд соединения в hub (только под сессией).
 func (h *handlers) websocket(w http.ResponseWriter, r *http.Request) {
 	h.Hub.Handle(w, r)
+}
+
+// alertsList — GET /alerts: активные + история (FR-12 3.12.4).
+func (h *handlers) alertsList(w http.ResponseWriter, r *http.Request) {
+	history, err := h.Store.AlertHistory(200)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "storage error")
+		return
+	}
+	active := []any{}
+	if h.Alerts != nil {
+		for _, a := range h.Alerts.Active() {
+			active = append(active, a)
+		}
+	}
+	writeJSON(w, map[string]any{"active": active, "history": history})
 }
 
 // audit — GET /audit?limit=&offset=: журнал действий (3.6.2).

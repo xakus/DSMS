@@ -16,8 +16,8 @@ export const router = createRouter({
     { path: '/events', name: 'events', component: () => import('../views/EventsView.vue') },
     { path: '/resources', name: 'resources', component: () => import('../views/ResourcesView.vue') },
     { path: '/disk', name: 'disk', component: () => import('../views/DiskUsageView.vue') },
+    { path: '/alerts', name: 'alerts', component: () => import('../views/AlertsView.vue') },
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
-    // Экран Alerts — этап 6.
   ],
 })
 

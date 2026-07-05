@@ -4,22 +4,36 @@
 import { computed, h } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { onMounted } from 'vue'
 import {
   NLayout, NLayoutSider, NLayoutHeader, NLayoutContent,
-  NMenu, NButton, NSpace, NSelect,
+  NMenu, NButton, NSpace, NSelect, NBadge, useMessage,
 } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { useMetricsStore } from '../stores/metrics'
+import { useAlertsStore } from '../stores/alerts'
 import { wsClient } from '../api/ws'
 
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
+const message = useMessage()
 const auth = useAuthStore()
 const theme = useThemeStore()
 const metrics = useMetricsStore()
+const alerts = useAlertsStore()
+
+// Колокольчик (3.12.2): подписка на алерты + тосты на новые.
+onMounted(() => {
+  alerts.load().catch(() => {})
+  alerts.start((a) => {
+    const text = `${a.rule}: ${a.message}`
+    if (a.severity === 'critical') message.error(text, { duration: 8000 })
+    else message.warning(text, { duration: 5000 })
+  })
+})
 
 // Пункты меню. Экраны этапов 4+ добавляются сюда по мере реализации.
 const menu = computed<MenuOption[]>(() => [
@@ -30,6 +44,7 @@ const menu = computed<MenuOption[]>(() => [
   { label: () => h(RouterLink, { to: { name: 'events' } }, { default: () => t('nav.events') }), key: 'events' },
   { label: () => h(RouterLink, { to: { name: 'resources' } }, { default: () => t('nav.resources') }), key: 'resources' },
   { label: () => h(RouterLink, { to: { name: 'disk' } }, { default: () => t('nav.disk') }), key: 'disk' },
+  { label: () => h(RouterLink, { to: { name: 'alerts' } }, { default: () => t('nav.alerts') }), key: 'alerts' },
   { label: () => h(RouterLink, { to: { name: 'settings' } }, { default: () => t('nav.settings') }), key: 'settings' },
 ])
 
@@ -48,6 +63,7 @@ function setLocale(v: string) {
 /** Выход: гасим WS и метрики, чистим сессию. */
 async function logout() {
   metrics.stop()
+  alerts.stop()
   wsClient.close()
   await auth.logout()
   router.replace({ name: 'login' })
@@ -63,6 +79,10 @@ async function logout() {
     <n-layout>
       <n-layout-header bordered class="header">
         <n-space justify="end" align="center">
+          <!-- Колокольчик активных алертов (FR-12 3.12.2) -->
+          <n-badge :value="alerts.active.length" :max="99" :show="alerts.active.length > 0">
+            <n-button quaternary size="small" @click="router.push({ name: 'alerts' })">🔔</n-button>
+          </n-badge>
           <n-select
             :value="locale" :options="locales" size="small" class="lang"
             @update:value="setLocale"
