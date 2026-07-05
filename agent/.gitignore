@@ -1,0 +1,4 @@
+# Go build artifacts
+bin/
+*.test
+*.out

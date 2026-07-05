@@ -1,0 +1,63 @@
+# DSMS — эталонный stack file поставки (раздел 7 ТЗ).
+#
+# Установка:
+#   openssl rand -hex 32 | docker secret create agent_token -
+#   docker stack deploy -c dsms.yml dsms
+#
+# ВАЖНО (безопасность, FR-07 3.7.5): panel НЕ публикует порт наружу.
+# Доступ — только через reverse proxy (Nginx Proxy Manager) с HTTPS,
+# подключённый к overlay-сети dsms.
+version: "3.8"
+
+services:
+  panel:
+    image: ghcr.io/xakus/dsms-panel:latest
+    networks: [dsms]
+    volumes:
+      # Доступ к Docker Engine API — panel живёт только на manager-ноде
+      - /var/run/docker.sock:/var/run/docker.sock
+      # SQLite: история метрик, пользователи, audit
+      - panel-data:/data
+    environment:
+      - DSMS_LISTEN=:9000
+      - DSMS_DB=/data/dsms.db
+    secrets: [agent_token]
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits: {memory: 256M}   # NFR-1
+      restart_policy: {condition: on-failure}
+
+  agent:
+    image: ghcr.io/xakus/dsms-agent:latest
+    networks: [dsms]
+    volumes:
+      # Хост-ресурсы read-only для gopsutil (разд. 2.3)
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/rootfs:ro
+    environment:
+      # ID ноды подставляет Swarm — по нему panel привязывает метрики
+      - NODE_ID={{.Node.ID}}
+      - PANEL_URL=http://panel:9000
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+    secrets: [agent_token]
+    deploy:
+      mode: global               # агент на каждой ноде, включая новые
+      resources:
+        limits: {memory: 64M}    # NFR-2
+      restart_policy: {condition: any}
+
+networks:
+  dsms:
+    driver: overlay
+    attachable: false
+
+volumes:
+  panel-data:
+
+secrets:
+  agent_token:
+    external: true

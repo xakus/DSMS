@@ -1,0 +1,10 @@
+# Go build artifacts
+bin/
+*.test
+*.out
+# локальная БД
+*.db
+*.db-*
+# статика фронта (генерируется сборкой)
+web/dist/*
+!web/dist/.gitkeep

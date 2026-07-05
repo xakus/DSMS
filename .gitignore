@@ -1,0 +1,36 @@
+# --- Общее ---
+.DS_Store
+*.log
+*.tmp
+.env
+.env.*
+!.env.example
+
+# --- Go (panel, agent) ---
+*.exe
+*.test
+*.out
+/panel/bin/
+/agent/bin/
+# собранная статика фронтенда, встраиваемая в panel (генерируется сборкой)
+/panel/web/dist/*
+!/panel/web/dist/.gitkeep
+
+# --- SQLite (локальная разработка) ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# --- Node / Vite (frontend) ---
+node_modules/
+# ВАЖНО: не глобальный dist/ — иначе он перекроет negation для panel/web/dist/.gitkeep
+/frontend/dist/
+.vite/
+*.local
+*.tsbuildinfo
+
+# --- IDE ---
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,20 @@
+{
+  "login": {
+    "title": "Sign in to DSMS",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "failed": "Invalid credentials"
+  },
+  "setup": {
+    "title": "Initial setup",
+    "hint": "Create the admin account for this panel.",
+    "submit": "Create admin"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "nodes": "Nodes",
+    "services": "Services",
+    "logout": "Sign out"
+  }
+}
