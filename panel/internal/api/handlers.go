@@ -152,6 +152,10 @@ func (h *handlers) ingest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Buffer.Put(snap)
+	// Запомнить адрес агента ноды — для команд df/volumes/prune (FR-10, FR-11).
+	if h.Agents != nil {
+		h.Agents.Set(snap.NodeID, ipFromRemoteAddr(r.RemoteAddr))
+	}
 	// Живая рассылка подписчикам topic=metrics (разд. 4.2).
 	h.Hub.Broadcast("metrics", "", map[string]any{
 		"topic": "metrics",

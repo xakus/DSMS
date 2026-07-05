@@ -28,6 +28,8 @@ const menu = computed<MenuOption[]>(() => [
   { label: () => h(RouterLink, { to: { name: 'stacks' } }, { default: () => t('nav.stacks') }), key: 'stacks' },
   { label: () => h(RouterLink, { to: { name: 'logs' } }, { default: () => t('nav.logs') }), key: 'logs' },
   { label: () => h(RouterLink, { to: { name: 'events' } }, { default: () => t('nav.events') }), key: 'events' },
+  { label: () => h(RouterLink, { to: { name: 'resources' } }, { default: () => t('nav.resources') }), key: 'resources' },
+  { label: () => h(RouterLink, { to: { name: 'disk' } }, { default: () => t('nav.disk') }), key: 'disk' },
   { label: () => h(RouterLink, { to: { name: 'settings' } }, { default: () => t('nav.settings') }), key: 'settings' },
 ])
 

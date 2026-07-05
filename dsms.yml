@@ -38,6 +38,8 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/host/rootfs:ro
+      # Docker Engine ноды: volumes/df/prune по командам панели (FR-10, FR-11)
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       # ID ноды подставляет Swarm — по нему panel привязывает метрики
       - NODE_ID={{.Node.ID}}

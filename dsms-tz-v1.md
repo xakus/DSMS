@@ -111,6 +111,25 @@
 - Идентификация ноды — по `NODE_ID` из `{{.Node.ID}}` (Swarm template в env)
 - При недоступности panel — буферизация до 60 сек, затем отбрасывание старых точек
 
+**Локальный HTTP API агента (для FR-10 volumes / FR-11 df+prune):**
+
+Тома и disk usage — локальны для каждого Docker Engine, панель видит только
+свой socket. Поэтому агент дополнительно монтирует `/var/run/docker.sock`
+и поднимает HTTP API на overlay-сети (`:9001`, env `DSMS_AGENT_LISTEN`),
+авторизация тем же `X-Agent-Token`:
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| GET | `/api/v1/df` | локальный `docker system df` |
+| GET | `/api/v1/volumes` | локальные тома |
+| POST | `/api/v1/volumes/remove` | `{name, force}` — удаление тома |
+| POST | `/api/v1/prune` | `{targets: [images\|containers\|volumes\|build-cache], all_images?}` |
+
+Панель узнаёт адрес агента ноды из RemoteAddr ingest-запросов
+(`node_id → IP` в памяти) и адресует команды конкретной ноде.
+Риск (разд. 10): docker.sock у агента = root ноды — митигируется тем, что
+API слушает только внутри overlay-сети и требует shared-token.
+
 ### 2.4. Компонент FRONTEND
 
 | Параметр | Значение |

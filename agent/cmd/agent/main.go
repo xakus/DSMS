@@ -15,7 +15,9 @@ import (
 
 	"github.com/xakus/DSMS/agent/internal/collector"
 	"github.com/xakus/DSMS/agent/internal/config"
+	"github.com/xakus/DSMS/agent/internal/dockerops"
 	"github.com/xakus/DSMS/agent/internal/sender"
+	"github.com/xakus/DSMS/agent/internal/server"
 )
 
 func main() {
@@ -32,9 +34,20 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	col := collector.New(cfg)
+	// Docker-операции (df/volumes/prune + счётчик контейнеров).
+	// Отсутствие docker.sock не фатально: метрики хоста работают без него.
+	ops, err := dockerops.New()
+	if err != nil {
+		slog.Warn("docker client unavailable, df/prune disabled", "err", err)
+		ops = nil
+	}
+
+	col := collector.New(cfg, ops)
 	snd := sender.New(cfg)
 	go snd.Run(ctx) // отправка с буферизацией — в своей горутине
+
+	// Локальный HTTP API для панели (df/volumes/prune, разд. 2.3).
+	go server.New(cfg, ops).Run(ctx)
 
 	slog.Info("agent started",
 		"node_id", cfg.NodeID, "panel", cfg.PanelURL, "interval", cfg.Interval.String())

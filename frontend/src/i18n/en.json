@@ -17,7 +17,28 @@
     "stacks": "Stacks",
     "logs": "Logs",
     "events": "Events",
+    "resources": "Resources",
+    "disk": "Disk usage",
     "settings": "Settings"
+  },
+  "resources": {
+    "usedBy": "Used by",
+    "size": "Size",
+    "inUse": "In use",
+    "used": "used",
+    "unused": "unused",
+    "value": "Value",
+    "secretHint": "The value is sent to Docker once and can never be read back.",
+    "removeConfirm": "Remove «{name}»?",
+    "removeUsedConfirm": "«{name}» is IN USE! Force-remove it?"
+  },
+  "disk": {
+    "reclaimable": "reclaimable",
+    "allImages": "prune all unused images (not only dangling)",
+    "pruneConfirm": "Prune {target} on {node}?",
+    "pruneHint": "Estimated space to reclaim: {size}. Only unused objects are removed.",
+    "pruned": "Reclaimed {size}",
+    "noAgents": "No agents have reported yet — disk usage is unavailable."
   },
   "logs": {
     "selectService": "Select a service",

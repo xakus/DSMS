@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/xakus/DSMS/panel/internal/agentclient"
 	"github.com/xakus/DSMS/panel/internal/api"
 	"github.com/xakus/DSMS/panel/internal/auth"
 	"github.com/xakus/DSMS/panel/internal/config"
@@ -95,6 +96,9 @@ func main() {
 		Hub:      hub,
 		Sessions: sessions,
 		Crypto:   box,
+		// Справочник агентов + клиент их API (volumes/df/prune, FR-10/FR-11).
+		Agents:      agentclient.NewDirectory(),
+		AgentClient: agentclient.New(cfg.AgentToken, ""),
 	})
 
 	srv := &http.Server{

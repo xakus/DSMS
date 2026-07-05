@@ -8,10 +8,12 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/xakus/DSMS/panel/internal/agentclient"
 	"github.com/xakus/DSMS/panel/internal/auth"
 	"github.com/xakus/DSMS/panel/internal/config"
 	"github.com/xakus/DSMS/panel/internal/crypto"
@@ -40,6 +42,17 @@ type DockerAPI interface {
 	ServiceRemove(ctx context.Context, id string) error
 	ServiceTasks(ctx context.Context, serviceID string) ([]swarm.Task, error)
 	Tasks(ctx context.Context) ([]swarm.Task, error)
+	Secrets(ctx context.Context) ([]swarm.Secret, error)
+	SecretCreate(ctx context.Context, name string, data []byte) (string, error)
+	SecretRemove(ctx context.Context, id string) error
+	Configs(ctx context.Context) ([]swarm.Config, error)
+	ConfigInspect(ctx context.Context, id string) (swarm.Config, error)
+	ConfigCreate(ctx context.Context, name string, data []byte) (string, error)
+	ConfigRemove(ctx context.Context, id string) error
+	Networks(ctx context.Context) ([]network.Summary, error)
+	NetworkInspect(ctx context.Context, id string) (network.Inspect, error)
+	NetworkCreate(ctx context.Context, name, driver string, attachable bool, subnet string) (string, error)
+	NetworkRemove(ctx context.Context, id string) error
 }
 
 // Deps — зависимости API-слоя, собираются в main.
@@ -53,6 +66,10 @@ type Deps struct {
 	// Crypto — шифрование паролей реестров (FR-13).
 	// nil — ключ не задан, registries API отвечает 503.
 	Crypto *crypto.Box
+	// Agents — справочник адресов агентов (node_id → IP из ingest).
+	Agents *agentclient.Directory
+	// AgentClient — вызовы HTTP API агентов (df/volumes/prune).
+	AgentClient *agentclient.Client
 }
 
 // NewRouter собирает chi-роутер: API + встроенная SPA.
@@ -112,6 +129,26 @@ func NewRouter(d Deps) http.Handler {
 
 			// --- журнал действий (FR-06) ---
 			r.Get("/audit", h.audit)
+
+			// --- secrets / configs (FR-09) ---
+			r.Get("/secrets", h.secretsList)
+			r.Post("/secrets", h.secretCreate)
+			r.Delete("/secrets/{id}", h.secretRemove)
+			r.Get("/configs", h.configsList)
+			r.Get("/configs/{id}", h.configContent)
+			r.Post("/configs", h.configCreate)
+			r.Delete("/configs/{id}", h.configRemove)
+
+			// --- networks / volumes (FR-10) ---
+			r.Get("/networks", h.networksList)
+			r.Post("/networks", h.networkCreate)
+			r.Delete("/networks/{id}", h.networkRemove)
+			r.Get("/volumes", h.volumesList)
+			r.Delete("/volumes/{name}", h.volumeRemove)
+
+			// --- disk usage / prune (FR-11) ---
+			r.Get("/system/df", h.systemDF)
+			r.Post("/system/prune", h.systemPrune)
 
 			// --- реестры (FR-13) ---
 			r.Get("/registries", h.registries)

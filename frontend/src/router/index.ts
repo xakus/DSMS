@@ -14,8 +14,10 @@ export const router = createRouter({
     { path: '/stacks', name: 'stacks', component: () => import('../views/StacksView.vue') },
     { path: '/logs', name: 'logs', component: () => import('../views/LogsView.vue') },
     { path: '/events', name: 'events', component: () => import('../views/EventsView.vue') },
+    { path: '/resources', name: 'resources', component: () => import('../views/ResourcesView.vue') },
+    { path: '/disk', name: 'disk', component: () => import('../views/DiskUsageView.vue') },
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
-    // Остальные экраны (resources, alerts) — этапы 5+.
+    // Экран Alerts — этап 6.
   ],
 })
 

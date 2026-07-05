@@ -31,6 +31,8 @@ type Config struct {
 	BufferAge time.Duration
 	// TopContainers — сколько контейнеров слать в батче (топ по CPU/RAM).
 	TopContainers int
+	// Listen — адрес локального HTTP API агента (df/volumes/prune, разд. 2.3).
+	Listen string
 }
 
 // Load читает конфигурацию; NODE_ID обязателен — без него панель
@@ -42,6 +44,7 @@ func Load() (*Config, error) {
 		Interval:      defaultInterval,
 		BufferAge:     defaultBufferAge,
 		TopContainers: defaultTopContainers,
+		Listen:        envOr("DSMS_AGENT_LISTEN", ":9001"),
 	}
 	if cfg.NodeID == "" {
 		return nil, errors.New("NODE_ID is required (set {{.Node.ID}} in stack file)")

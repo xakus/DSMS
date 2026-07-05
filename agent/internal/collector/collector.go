@@ -19,11 +19,13 @@ import (
 	gnet "github.com/shirou/gopsutil/v4/net"
 
 	"github.com/xakus/DSMS/agent/internal/config"
+	"github.com/xakus/DSMS/agent/internal/dockerops"
 )
 
 // Collector собирает снапшоты; хранит предыдущие счётчики для расчёта дельт.
 type Collector struct {
 	cfg      *config.Config
+	ops      *dockerops.Ops // nil — docker.sock не смонтирован
 	hostname string
 
 	prevTime time.Time                     // время предыдущего тика
@@ -32,9 +34,9 @@ type Collector struct {
 }
 
 // New создаёт Collector; hostname читается один раз при старте.
-func New(cfg *config.Config) *Collector {
+func New(cfg *config.Config, ops *dockerops.Ops) *Collector {
 	hn, _ := os.Hostname()
-	return &Collector{cfg: cfg, hostname: hn}
+	return &Collector{cfg: cfg, ops: ops, hostname: hn}
 }
 
 // Collect собирает полный снапшот метрик ноды.
@@ -80,8 +82,13 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 	if up, err := host.UptimeWithContext(ctx); err == nil {
 		snap.Sys.Uptime = up
 	}
-	// TODO(этап 1, FR-02): per-container метрики из cgroups (/host/sys/fs/cgroup)
-	// + подсчёт контейнеров ноды; слать топ-N по CPU/RAM (NFR-2a).
+	if c.ops != nil {
+		if n, err := c.ops.Containers(ctx); err == nil {
+			snap.Sys.Containers = n
+		}
+	}
+	// TODO(этап 8, FR-02): per-container CPU/RAM из cgroups (/host/sys/fs/cgroup),
+	// слать топ-N по CPU/RAM (NFR-2a).
 
 	c.prevTime = now
 	return snap, nil
