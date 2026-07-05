@@ -156,6 +156,11 @@ func NewRouter(d Deps) http.Handler {
 			// --- алерты (FR-12) ---
 			r.Get("/alerts", h.alertsList)
 
+			// --- настройки (6.2 экран 12) ---
+			r.Get("/settings", h.getSettings)
+			r.Put("/settings", h.putSettings)
+			r.Post("/settings/password", h.changePassword)
+
 			// --- реестры (FR-13) ---
 			r.Get("/registries", h.registries)
 			r.Post("/registries", h.registryCreate)

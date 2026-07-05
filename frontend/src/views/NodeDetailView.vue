@@ -2,12 +2,12 @@
 // Страница ноды (FR-02) + управление (FR-03):
 // живые графики CPU/RAM/Disk I/O/Net (15 мин), таблицы дисков/сети/задач,
 // labels-редактор, promote/demote, availability, remove.
-import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   NCard, NSpace, NButton, NTag, NDataTable, NProgress, NGrid, NGi,
-  NDynamicInput, NModal, useMessage, useDialog,
+  NDynamicInput, NModal, NRadioGroup, NRadioButton, useMessage, useDialog,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import type uPlot from 'uplot'
@@ -58,25 +58,77 @@ onBeforeUnmount(() => {
 const win = computed(() => metrics.windows.get(nodeId) ?? [])
 const snap = computed(() => metrics.latest.get(nodeId) ?? node.value?.metrics)
 
-// --- данные графиков ---
-const cpuData = computed<uPlot.AlignedData>(() => [
-  win.value.map((s) => s.ts),
-  win.value.map((s) => s.cpu.total_pct),
-])
-const memData = computed<uPlot.AlignedData>(() => [
-  win.value.map((s) => s.ts),
-  win.value.map((s) => s.mem.used),
-])
-const diskIOData = computed<uPlot.AlignedData>(() => [
-  win.value.map((s) => s.ts),
-  win.value.map((s) => (s.disk ?? []).reduce((a, d) => a + d.read_bps, 0)),
-  win.value.map((s) => (s.disk ?? []).reduce((a, d) => a + d.write_bps, 0)),
-])
-const netData = computed<uPlot.AlignedData>(() => [
-  win.value.map((s) => s.ts),
-  win.value.map((s) => (s.net ?? []).reduce((a, n) => a + n.rx_bps, 0)),
-  win.value.map((s) => (s.net ?? []).reduce((a, n) => a + n.tx_bps, 0)),
-])
+// --- выбор окна графиков: 15m live / история из SQLite (3.2.1) ---
+
+/** Минутная точка истории (metrics_1m). */
+interface HistPoint {
+  ts: number
+  cpu_pct: number
+  mem_used: number
+  mem_total: number
+  disk_json: string
+  net_json: string
+}
+
+const windowSel = ref<'15m' | '1h' | '6h' | '24h' | '7d'>('15m')
+const hist = ref<HistPoint[]>([])
+const isLive = computed(() => windowSel.value === '15m')
+
+/** Загрузка истории при смене окна. */
+watch(windowSel, async (w) => {
+  if (w === '15m') return
+  hist.value = await api<HistPoint[]>(`/metrics/nodes/${nodeId}?window=${w}`)
+})
+
+/** Распарсить *_json точки истории (агрегированные скорости). */
+function histAgg(p: HistPoint): { read: number; write: number; rx: number; tx: number } {
+  let read = 0, write = 0, rx = 0, tx = 0
+  try {
+    const d = JSON.parse(p.disk_json || '{}')
+    read = d.read_bps ?? 0
+    write = d.write_bps ?? 0
+  } catch { /* пустой json */ }
+  try {
+    const n = JSON.parse(p.net_json || '{}')
+    rx = n.rx_bps ?? 0
+    tx = n.tx_bps ?? 0
+  } catch { /* пустой json */ }
+  return { read, write, rx, tx }
+}
+
+// --- данные графиков: live-буфер или история ---
+const cpuData = computed<uPlot.AlignedData>(() =>
+  isLive.value
+    ? [win.value.map((s) => s.ts), win.value.map((s) => s.cpu.total_pct)]
+    : [hist.value.map((p) => p.ts), hist.value.map((p) => p.cpu_pct)])
+const memData = computed<uPlot.AlignedData>(() =>
+  isLive.value
+    ? [win.value.map((s) => s.ts), win.value.map((s) => s.mem.used)]
+    : [hist.value.map((p) => p.ts), hist.value.map((p) => p.mem_used)])
+const diskIOData = computed<uPlot.AlignedData>(() =>
+  isLive.value
+    ? [
+        win.value.map((s) => s.ts),
+        win.value.map((s) => (s.disk ?? []).reduce((a, d) => a + d.read_bps, 0)),
+        win.value.map((s) => (s.disk ?? []).reduce((a, d) => a + d.write_bps, 0)),
+      ]
+    : [
+        hist.value.map((p) => p.ts),
+        hist.value.map((p) => histAgg(p).read),
+        hist.value.map((p) => histAgg(p).write),
+      ])
+const netData = computed<uPlot.AlignedData>(() =>
+  isLive.value
+    ? [
+        win.value.map((s) => s.ts),
+        win.value.map((s) => (s.net ?? []).reduce((a, n) => a + n.rx_bps, 0)),
+        win.value.map((s) => (s.net ?? []).reduce((a, n) => a + n.tx_bps, 0)),
+      ]
+    : [
+        hist.value.map((p) => p.ts),
+        hist.value.map((p) => histAgg(p).rx),
+        hist.value.map((p) => histAgg(p).tx),
+      ])
 
 // --- таблицы ---
 /** Диски: подсветка > 85% (3.2.2). */
@@ -219,7 +271,15 @@ async function saveLabels() {
         <template v-if="snap?.sys"> · ⏱ {{ fmtUptime(snap.sys.uptime) }} · 📦 {{ snap.sys.containers }}</template>
       </div>
 
-      <!-- Графики live-окна 15 мин (3.2.1); окна 1ч+ — этап 7 -->
+      <!-- Селектор окна графиков (3.2.1): 15м live / история из SQLite -->
+      <n-radio-group v-model:value="windowSel" size="small" class="mb">
+        <n-radio-button value="15m">15m ⚡</n-radio-button>
+        <n-radio-button value="1h">1h</n-radio-button>
+        <n-radio-button value="6h">6h</n-radio-button>
+        <n-radio-button value="24h">24h</n-radio-button>
+        <n-radio-button value="7d">7d</n-radio-button>
+      </n-radio-group>
+
       <n-grid cols="1 m:2" responsive="screen" :x-gap="12" :y-gap="12" class="mb">
         <n-gi>
           <n-card :title="`CPU ${fmtPct(snap?.cpu.total_pct)}`" size="small">

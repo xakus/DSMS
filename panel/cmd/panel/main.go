@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/xakus/DSMS/panel/internal/config"
 	"github.com/xakus/DSMS/panel/internal/crypto"
 	"github.com/xakus/DSMS/panel/internal/dockerapi"
+	"github.com/xakus/DSMS/panel/internal/history"
 	"github.com/xakus/DSMS/panel/internal/metrics"
 	"github.com/xakus/DSMS/panel/internal/store"
 	"github.com/xakus/DSMS/panel/internal/streams"
@@ -108,6 +110,12 @@ func main() {
 
 	// Движок алертов (FR-12): доставка в WS topic "alerts".
 	engine := alerts.NewEngine(db, wsNotifier{hub}, buf, docker)
+	// Порог disk_high из настроек (Settings, экран 12).
+	if v, _ := db.GetSetting("alert.disk_pct"); v != "" {
+		if pct, err := strconv.ParseFloat(v, 64); err == nil {
+			engine.SetDiskPct(pct)
+		}
+	}
 
 	router := api.NewRouter(api.Deps{
 		Cfg:      cfg,
@@ -135,6 +143,9 @@ func main() {
 
 	// Периодические проверки алертов: агент молчит, сервис degraded.
 	go engine.Run(ctx)
+
+	// Минутные агрегаты метрик + ретенция 7 дн + VACUUM (разд. 2.2, 5 ТЗ).
+	go history.New(db, buf).Run(ctx)
 
 	// Лента Docker events → WS "events" (FR-06) + алерт task_failed (FR-12).
 	go streams.RunEvents(ctx, docker, hub, func(m events.Message) {

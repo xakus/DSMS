@@ -87,6 +87,14 @@
     "removeHint": "Будут удалены все сервисы стека ({count} шт.). Введите «{name}» для подтверждения."
   },
   "settings": {
+    "general": "Общие",
+    "password": "Смена пароля",
+    "oldPassword": "Текущий пароль",
+    "newPassword": "Новый пароль (мин. 8 символов)",
+    "pwChanged": "Пароль изменён, войдите заново",
+    "alerts": "Пороги алертов",
+    "diskThreshold": "Алерт по диску, %",
+    "tokenRotation": "Ротация agent-token (Docker CLI на manager-ноде)",
     "registries": "Реестры",
     "addRegistry": "Добавить реестр",
     "regAddress": "Адрес",

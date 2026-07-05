@@ -1,19 +1,57 @@
 <script setup lang="ts">
-// Settings (разд. 6.2 экран 12), этап 3: вкладка Registries (FR-13).
-// Смена пароля, ротация agent-token, пороги алертов — этап 7.
+// Settings (разд. 6.2 экран 12): General (пароль, пороги алертов,
+// инструкция ротации agent-token) + Registries (FR-13).
 import { computed, h, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   NCard, NTabs, NTabPane, NDataTable, NButton, NSpace, NModal,
-  NForm, NFormItem, NInput, useMessage,
+  NForm, NFormItem, NInput, NInputNumber, NAlert, useMessage,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import AppLayout from '../components/AppLayout.vue'
 import { api, ApiError } from '../api/client'
+import { useAuthStore } from '../stores/auth'
 import type { RegistryInfo } from '../types'
 
 const { t } = useI18n()
 const message = useMessage()
+const router = useRouter()
+const auth = useAuthStore()
+
+// --- General: смена пароля + порог disk-алерта ---
+const pwForm = ref({ old: '', new: '' })
+const diskPct = ref(90)
+
+/** Загрузить настройки панели. */
+async function loadSettings() {
+  try {
+    const s = await api<{ alert_disk_pct: number }>('/settings')
+    diskPct.value = s.alert_disk_pct
+  } catch { /* настройки недоступны — оставляем дефолт */ }
+}
+
+/** Сменить пароль: после успеха — relogin. */
+async function changePassword() {
+  try {
+    await api('/settings/password', { method: 'POST', body: pwForm.value })
+    message.success(t('settings.pwChanged'))
+    await auth.logout()
+    router.replace({ name: 'login' })
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : 'error')
+  }
+}
+
+/** Сохранить порог disk-алерта (применяется сразу). */
+async function saveThreshold() {
+  try {
+    await api('/settings', { method: 'PUT', body: { alert_disk_pct: diskPct.value } })
+    message.success('OK')
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : 'error')
+  }
+}
 
 const registries = ref<RegistryInfo[]>([])
 const showForm = ref(false)
@@ -29,7 +67,10 @@ async function load() {
     message.warning(e instanceof ApiError ? e.message : t('common.loadFailed'))
   }
 }
-onMounted(load)
+onMounted(() => {
+  load()
+  loadSettings()
+})
 
 function openCreate() {
   editId.value = null
@@ -90,6 +131,39 @@ const columns = computed<DataTableColumns<RegistryInfo>>(() => [
   <AppLayout>
     <n-card :title="t('nav.settings')" size="small">
       <n-tabs type="line">
+        <n-tab-pane name="general" :tab="t('settings.general')">
+          <n-space vertical size="large" class="general">
+            <!-- Смена пароля -->
+            <n-card :title="t('settings.password')" size="small">
+              <n-form label-placement="top">
+                <n-form-item :label="t('settings.oldPassword')">
+                  <n-input v-model:value="pwForm.old" type="password" show-password-on="click" />
+                </n-form-item>
+                <n-form-item :label="t('settings.newPassword')">
+                  <n-input v-model:value="pwForm.new" type="password" show-password-on="click" />
+                </n-form-item>
+                <n-button type="primary" @click="changePassword">{{ t('common.save') }}</n-button>
+              </n-form>
+            </n-card>
+
+            <!-- Пороги алертов (FR-12, применяется на лету) -->
+            <n-card :title="t('settings.alerts')" size="small">
+              <n-space align="center">
+                <span>{{ t('settings.diskThreshold') }}</span>
+                <n-input-number v-model:value="diskPct" :min="50" :max="99" />
+                <n-button size="small" @click="saveThreshold">{{ t('common.save') }}</n-button>
+              </n-space>
+            </n-card>
+
+            <!-- Ротация agent-token: только через Docker CLI -->
+            <n-alert type="info" :title="t('settings.tokenRotation')">
+              <pre class="cli">docker secret rm agent_token
+openssl rand -hex 32 | docker secret create agent_token -
+docker service update --secret-rm agent_token --secret-add agent_token dsms_panel
+docker service update --secret-rm agent_token --secret-add agent_token dsms_agent</pre>
+            </n-alert>
+          </n-space>
+        </n-tab-pane>
         <n-tab-pane name="registries" :tab="t('settings.registries')">
           <n-space vertical>
             <n-space justify="end">
@@ -98,7 +172,6 @@ const columns = computed<DataTableColumns<RegistryInfo>>(() => [
             <n-data-table :columns="columns" :data="registries" size="small" :bordered="false" />
           </n-space>
         </n-tab-pane>
-        <!-- Смена пароля / токены / пороги — этап 7 -->
       </n-tabs>
     </n-card>
 
@@ -129,8 +202,15 @@ const columns = computed<DataTableColumns<RegistryInfo>>(() => [
 </template>
 
 <style scoped>
-/* Компактный модал формы реестра */
+/* Компактный модал формы реестра и блоки General */
 .reg-modal {
   max-width: 480px;
+}
+.general {
+  max-width: 640px;
+}
+.cli {
+  font-size: 12px;
+  overflow-x: auto;
 }
 </style>

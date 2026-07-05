@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/go-chi/chi/v5"
@@ -283,9 +284,35 @@ func (h *handlers) rotateJoinTokens(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "ok"})
 }
 
-// nodeMetrics — GET /metrics/nodes/{id}: live-окно из кольцевого буфера.
-// Исторические окна (1ч–7дн из SQLite) — этап 7.
+// nodeMetrics — GET /metrics/nodes/{id}?window=15m|1h|6h|24h|7d (3.2.1):
+// 15m (по умолчанию) — live-окно из кольцевого буфера;
+// остальные — минутные агрегаты из SQLite (metrics_1m).
 func (h *handlers) nodeMetrics(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	writeJSON(w, h.Buffer.Window(id))
+	window := r.URL.Query().Get("window")
+
+	var dur time.Duration
+	switch window {
+	case "", "15m":
+		writeJSON(w, h.Buffer.Window(id))
+		return
+	case "1h":
+		dur = time.Hour
+	case "6h":
+		dur = 6 * time.Hour
+	case "24h":
+		dur = 24 * time.Hour
+	case "7d":
+		dur = 7 * 24 * time.Hour
+	default:
+		writeErr(w, http.StatusBadRequest, "window must be 15m, 1h, 6h, 24h or 7d")
+		return
+	}
+	now := time.Now().Unix()
+	points, err := h.Store.MetricsRange(id, now-int64(dur.Seconds()), now)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "storage error")
+		return
+	}
+	writeJSON(w, points)
 }

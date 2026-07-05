@@ -87,6 +87,14 @@
     "removeHint": "This removes all {count} services of the stack. Type «{name}» to confirm."
   },
   "settings": {
+    "general": "General",
+    "password": "Change password",
+    "oldPassword": "Current password",
+    "newPassword": "New password (min 8 chars)",
+    "pwChanged": "Password changed, sign in again",
+    "alerts": "Alert thresholds",
+    "diskThreshold": "Disk usage alert, %",
+    "tokenRotation": "Agent token rotation (Docker CLI on a manager node)",
     "registries": "Registries",
     "addRegistry": "Add registry",
     "regAddress": "Address",

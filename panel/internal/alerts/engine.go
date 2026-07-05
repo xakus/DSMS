@@ -90,6 +90,20 @@ func NewEngine(st AlertStore, n Notifier, buf *metrics.ClusterBuffer, cluster Cl
 	}
 }
 
+// SetDiskPct меняет порог disk_high на лету (Settings, этап 7).
+func (e *Engine) SetDiskPct(pct float64) {
+	e.mu.Lock()
+	e.diskPct = pct
+	e.mu.Unlock()
+}
+
+// diskThreshold возвращает текущий порог (потокобезопасно).
+func (e *Engine) diskThreshold() float64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.diskPct
+}
+
 // Active возвращает копию активных алертов (для GET /alerts).
 func (e *Engine) Active() []Alert {
 	e.mu.Lock()
@@ -154,6 +168,7 @@ func (e *Engine) Event(rule, severity, objectType, objectID, message string) {
 
 // Evaluate вычисляет метрические правила на свежем батче (3.12.1).
 func (e *Engine) Evaluate(snap metrics.Snapshot) {
+	threshold := e.diskThreshold()
 	// disk_high: по каждой точке монтирования.
 	for _, d := range snap.Disk {
 		if d.Total == 0 {
@@ -161,7 +176,7 @@ func (e *Engine) Evaluate(snap metrics.Snapshot) {
 		}
 		pct := float64(d.Used) / float64(d.Total) * 100
 		k := key{rule: "disk_high", obj: snap.NodeID + ":" + d.Mount}
-		if pct > e.diskPct {
+		if pct > threshold {
 			e.open(k, "critical", "node",
 				fmt.Sprintf("disk %s on %s used %.1f%%", d.Mount, snap.Hostname, pct))
 		} else {
