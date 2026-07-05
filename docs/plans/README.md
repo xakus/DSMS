@@ -10,9 +10,13 @@
 | 3 | [stage-3-services-stacks.md](stage-3-services-stacks.md) | Сервисы + стеки + registry auth (FR-04, FR-08, FR-13) | ✅ готов |
 | 4 | [stage-4-logs-events-audit.md](stage-4-logs-events-audit.md) | Логи, события, audit (FR-05, FR-06) | ✅ готов |
 | 5 | [stage-5-resources.md](stage-5-resources.md) | Secrets/Configs/Networks/Volumes + prune (FR-09, FR-10, FR-11) | ✅ готов |
-| 6 | [stage-6-alerts.md](stage-6-alerts.md) | In-app алерты (FR-12) | 🔄 в работе |
-| 7 | [stage-7-history-settings.md](stage-7-history-settings.md) | История метрик SQLite, Settings (окна 1ч–7дн) | ⬜ |
-| 8 | [stage-8-polish-ci.md](stage-8-polish-ci.md) | Безопасность, i18n, multi-arch CI, документация | ⬜ |
+| 6 | [stage-6-alerts.md](stage-6-alerts.md) | In-app алерты (FR-12) | ✅ готов |
+| 7 | [stage-7-history-settings.md](stage-7-history-settings.md) | История метрик SQLite, Settings (окна 1ч–7дн) | ✅ готов |
+| 8 | [stage-8-polish-ci.md](stage-8-polish-ci.md) | Безопасность, i18n, multi-arch CI, документация | ✅ готов |
+
+**Все 8 этапов v1 реализованы.** Дальше: проверка на живом Swarm-кластере
+(критерии в файлах этапов, помеченные «живой кластер»), затем тег v1.0.0 —
+release-workflow соберёт multi-arch образы в ghcr.io.
 
 Правила: MVP = этапы 1–4. Каждый этап завершается тестами
 (`go test`, `npm run build`), обновлением README/CLAUDE.md и коммитом.

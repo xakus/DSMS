@@ -171,6 +171,18 @@ const netRows = computed(() =>
   })),
 )
 
+/** Контейнеры ноды с per-container метриками (3.2.6, топ-N от агента). */
+const containerRows = computed(() => snap.value?.containers ?? [])
+const containerColumns = computed<DataTableColumns<Record<string, unknown>>>(() => [
+  { title: t('services.name'), key: 'name', ellipsis: true },
+  { title: t('nodes.service'), key: 'service', render: (r) => (r.service as string) || '—' },
+  { title: 'CPU %', key: 'cpu_pct', width: 90, sorter: 'default' },
+  {
+    title: 'RAM', key: 'mem', width: 180,
+    render: (r) => `${fmtBytes(r.mem_used as number)}${(r.mem_limit as number) ? ' / ' + fmtBytes(r.mem_limit as number) : ''}`,
+  },
+])
+
 /** Задачи на ноде (3.2.4) со ссылками на сервисы (появятся в этапе 3). */
 const taskColumns = computed<DataTableColumns<NodeTask>>(() => [
   { title: t('nodes.service'), key: 'service' },
@@ -322,6 +334,11 @@ async function saveLabels() {
           </n-card>
         </n-gi>
       </n-grid>
+
+      <!-- Контейнеры ноды: per-container CPU/RAM, топ по нагрузке (3.2.6) -->
+      <n-card v-if="containerRows.length" :title="`${t('nodes.containers')} (${snap?.sys?.containers ?? containerRows.length})`" size="small" class="mb">
+        <n-data-table :columns="containerColumns" :data="containerRows" size="small" :bordered="false" />
+      </n-card>
 
       <n-card :title="`${t('nodes.tasks')} (${node.tasks.length})`" size="small">
         <n-data-table :columns="taskColumns" :data="node.tasks" size="small" :bordered="false" />

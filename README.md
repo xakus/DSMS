@@ -60,5 +60,16 @@ overlay-сети `dsms`. Подробнее — раздел 7 ТЗ.
 
 ## Статус
 
-Этап 1 из 8 (skeleton): auth + setup, ingest метрик, WebSocket-hub, сводка
-кластера, SPA (login/dashboard), stack file. План работ — раздел 9 ТЗ.
+**Все 8 этапов v1 реализованы** (план — [docs/plans/](docs/plans/README.md)):
+
+1. ✅ Skeleton: auth + setup, ingest, WebSocket-hub, stack file
+2. ✅ Dashboard + Node detail + управление нодами (FR-01..03)
+3. ✅ Сервисы + стеки + registry auth (FR-04, FR-08, FR-13)
+4. ✅ Логи + события + audit (FR-05, FR-06)
+5. ✅ Secrets/Configs/Networks/Volumes + prune (FR-09..11)
+6. ✅ In-app алерты (FR-12)
+7. ✅ История метрик (окна 1ч–7дн) + Settings
+8. ✅ Per-container метрики, security headers, CI (multi-arch)
+
+Следующий шаг — приёмка на живом Swarm-кластере и тег `v1.0.0`
+(release-workflow опубликует образы в ghcr.io).

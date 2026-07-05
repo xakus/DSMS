@@ -83,6 +83,7 @@ func NewRouter(d Deps) http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
+	r.Use(securityHeaders)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// --- без аутентификации ---

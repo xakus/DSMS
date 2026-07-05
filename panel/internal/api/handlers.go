@@ -100,6 +100,8 @@ func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 	u, err := h.Store.UserByUsername(req.Username)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && !auth.CheckPassword(u.PasswordHash, req.Password)) {
 		h.Sessions.RecordFailure(ip)
+		// Экспоненциальный backoff против перебора (3.7.3).
+		time.Sleep(h.Sessions.FailureDelay(ip))
 		writeErr(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}

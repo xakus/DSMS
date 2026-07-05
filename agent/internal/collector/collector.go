@@ -82,13 +82,19 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 	if up, err := host.UptimeWithContext(ctx); err == nil {
 		snap.Sys.Uptime = up
 	}
+	// --- Контейнеры: per-container CPU/RAM из cgroups, топ-N (FR-02, NFR-2a) ---
 	if c.ops != nil {
-		if n, err := c.ops.Containers(ctx); err == nil {
-			snap.Sys.Containers = n
+		if cm, total, err := c.ops.ContainerMetrics(ctx, c.cfg.TopContainers); err == nil {
+			snap.Sys.Containers = total
+			snap.Containers = make([]Container, 0, len(cm))
+			for _, m := range cm {
+				snap.Containers = append(snap.Containers, Container{
+					ID: m.ID, Name: m.Name, Service: m.Service,
+					CPUPct: m.CPUPct, MemUsed: m.MemUsed, MemLimit: m.MemLimit,
+				})
+			}
 		}
 	}
-	// TODO(этап 8, FR-02): per-container CPU/RAM из cgroups (/host/sys/fs/cgroup),
-	// слать топ-N по CPU/RAM (NFR-2a).
 
 	c.prevTime = now
 	return snap, nil

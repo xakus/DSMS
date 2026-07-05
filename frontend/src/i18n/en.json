@@ -133,6 +133,7 @@
     "disks": "Disks",
     "network": "Network interfaces",
     "tasks": "Tasks on node",
+    "containers": "Containers",
     "mount": "Mount",
     "used": "Used",
     "size": "Size",

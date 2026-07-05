@@ -1,0 +1,65 @@
+# CI DSMS: сборка и тесты всех трёх компонентов (NFR-7).
+# Порядок важен: frontend собирается ПЕРВЫМ — panel встраивает
+# его статику через go:embed.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install & build (vue-tsc typecheck + vite)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      # Статика нужна panel-джобе для go:embed
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: panel/web/dist
+
+  panel:
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: panel/go.sum
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: panel/web/dist
+      - name: Build, vet, test
+        working-directory: panel
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: agent/go.sum
+      - name: Build, vet, test
+        working-directory: agent
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...

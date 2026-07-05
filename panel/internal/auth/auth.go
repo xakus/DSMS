@@ -92,6 +92,19 @@ func (m *Manager) RecordFailure(ip string) {
 	m.attempts[ip] = append(m.attempts[ip], time.Now())
 }
 
+// FailureDelay — экспоненциальный backoff перед ответом на неудачный
+// login (3.7.3): 200мс × 2^n, максимум 3с.
+func (m *Manager) FailureDelay(ip string) time.Duration {
+	m.mu.Lock()
+	n := len(m.attempts[ip])
+	m.mu.Unlock()
+	d := 200 * time.Millisecond << n
+	if d > 3*time.Second {
+		d = 3 * time.Second
+	}
+	return d
+}
+
 // Create создаёт сессию для пользователя и возвращает её.
 func (m *Manager) Create(u *store.User) (*Session, error) {
 	token, err := randomHex(32)

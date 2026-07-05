@@ -9,7 +9,6 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/build"
-	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 )
@@ -17,6 +16,8 @@ import (
 // Ops — обёртка docker client для локальных операций ноды.
 type Ops struct {
 	c *client.Client
+	// prevCPU — предыдущие CPU-счётчики контейнеров (для расчёта дельт).
+	prevCPU map[string]cpuSample
 }
 
 // New создаёт клиента к локальному docker.sock.
@@ -26,7 +27,7 @@ func New() (*Ops, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Ops{c: c}, nil
+	return &Ops{c: c, prevCPU: make(map[string]cpuSample)}, nil
 }
 
 // Close освобождает ресурсы клиента.
@@ -172,11 +173,3 @@ func (o *Ops) Prune(ctx context.Context, targets []string, allImages bool) []Pru
 	return out
 }
 
-// Containers возвращает число запущенных контейнеров (для sys.containers батча).
-func (o *Ops) Containers(ctx context.Context) (int, error) {
-	list, err := o.c.ContainerList(ctx, container.ListOptions{})
-	if err != nil {
-		return 0, err
-	}
-	return len(list), nil
-}

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Техническое задание — `dsms-tz-v1.md` (**версия 1.1**) — единственный источник истины по архитектуре и требованиям; перед реализацией любой части сверяйся с ним. FR-нумерация в ТЗ (FR-01…FR-13) — опорная система координат: в коде и коммитах ссылайся на FR-номера.
 
-Название продукта — **DSMS** (Docker Swarm Management System). Репозиторий: `git@github.com:xakus/DSMS.git`. Реализован этап 1 из 8 (skeleton: auth+setup, ingest, WS-hub, сводка кластера, SPA login/dashboard).
+Название продукта — **DSMS** (Docker Swarm Management System). Репозиторий: `git@github.com:xakus/DSMS.git`. **Все 8 этапов v1 реализованы** (статусы — `docs/plans/README.md`); осталась приёмка на живом Swarm и тег `v1.0.0`. Ключевые архитектурные факты сверх ТЗ: агент имеет docker.sock и локальный HTTP API `:9001` (df/volumes/prune — панель адресует его по IP из ingest); стек — агрегация по label, не объект; Stop сервиса запоминает реплики в `service_state`.
 
 ## Команды
 
