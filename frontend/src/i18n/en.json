@@ -11,10 +11,45 @@
     "hint": "Create the admin account for this panel.",
     "submit": "Create admin"
   },
+  "nav": {
+    "dashboard": "Dashboard"
+  },
+  "common": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "copy": "Copy",
+    "copied": "Copied",
+    "remove": "Remove",
+    "loadFailed": "Failed to load data"
+  },
   "dashboard": {
     "title": "Dashboard",
     "nodes": "Nodes",
     "services": "Services",
     "logout": "Sign out"
+  },
+  "nodes": {
+    "agentSilent": "agent silent",
+    "addNode": "Add node",
+    "rotateTokens": "Rotate tokens",
+    "rotateTitle": "Rotate join tokens?",
+    "rotateConfirm": "Old tokens will stop working immediately.",
+    "rotated": "Tokens rotated",
+    "promoteConfirm": "Promote this node to manager?",
+    "demoteConfirm": "Demote this node to worker?",
+    "drainConfirm": "Drain the node? All tasks will be moved to other nodes.",
+    "removeConfirm": "Remove this node from the cluster?",
+    "forceRemoveConfirm": "Node is not down! Force-remove it from the cluster?",
+    "disks": "Disks",
+    "network": "Network interfaces",
+    "tasks": "Tasks on node",
+    "mount": "Mount",
+    "used": "Used",
+    "size": "Size",
+    "iface": "Interface",
+    "service": "Service",
+    "state": "State",
+    "message": "Message"
   }
 }

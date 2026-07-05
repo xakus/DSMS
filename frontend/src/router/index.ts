@@ -8,7 +8,8 @@ export const router = createRouter({
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
     { path: '/setup', name: 'setup', component: () => import('../views/SetupView.vue') },
     { path: '/', name: 'dashboard', component: () => import('../views/DashboardView.vue') },
-    // Остальные экраны (nodes, services, stacks, ...) — этапы 2+.
+    { path: '/nodes/:id', name: 'node', component: () => import('../views/NodeDetailView.vue') },
+    // Остальные экраны (services, stacks, logs, ...) — этапы 3+.
   ],
 })
 

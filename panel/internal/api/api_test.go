@@ -19,8 +19,8 @@ import (
 	"github.com/xakus/DSMS/panel/internal/ws"
 )
 
-// newTestServer собирает роутер с временной БД и тестовым agent-token.
-func newTestServer(t *testing.T) (*httptest.Server, *metrics.ClusterBuffer) {
+// newTestServer собирает роутер с временной БД, fake-Docker и тестовым agent-token.
+func newTestServer(t *testing.T, docker *fakeDocker) (*httptest.Server, *metrics.ClusterBuffer) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -28,6 +28,9 @@ func newTestServer(t *testing.T) (*httptest.Server, *metrics.ClusterBuffer) {
 	}
 	t.Cleanup(func() { db.Close() })
 
+	if docker == nil {
+		docker = &fakeDocker{}
+	}
 	// CookieSecure=false: httptest работает по http, Secure-cookie jar не примет.
 	cfg := &config.Config{AgentToken: "test-token", SessionTTL: time.Hour, CookieSecure: false}
 	buf := metrics.NewClusterBuffer(15*time.Minute, 3*time.Second)
@@ -35,13 +38,34 @@ func newTestServer(t *testing.T) (*httptest.Server, *metrics.ClusterBuffer) {
 	srv := httptest.NewServer(NewRouter(Deps{
 		Cfg:      cfg,
 		Store:    db,
-		Docker:   nil, // Docker-эндпоинты в этих тестах не вызываются
+		Docker:   docker,
 		Buffer:   buf,
 		Hub:      ws.NewHub(),
 		Sessions: auth.NewManager(db, cfg.SessionTTL),
 	}))
 	t.Cleanup(srv.Close)
 	return srv, buf
+}
+
+// loginClient делает setup+login и возвращает клиент с cookie и CSRF-токеном.
+func loginClient(t *testing.T, srv *httptest.Server) (*http.Client, string) {
+	t.Helper()
+	jar := newCookieClient(t)
+	resp := postJSON(t, jar, srv.URL+"/api/v1/setup",
+		map[string]string{"username": "admin", "password": "secret123"}, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("setup: got %d", resp.StatusCode)
+	}
+	resp = postJSON(t, jar, srv.URL+"/api/v1/login",
+		map[string]string{"username": "admin", "password": "secret123"}, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login: got %d", resp.StatusCode)
+	}
+	var login struct {
+		CSRF string `json:"csrf"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&login)
+	return jar, login.CSRF
 }
 
 // postJSON — POST с JSON-телом и произвольными заголовками.
@@ -62,7 +86,7 @@ func postJSON(t *testing.T, client *http.Client, url string, body any, headers m
 
 // TestAuthFlow проверяет полный цикл: setup → login → me → CSRF → logout.
 func TestAuthFlow(t *testing.T) {
-	srv, _ := newTestServer(t)
+	srv, _ := newTestServer(t, nil)
 	jar := newCookieClient(t)
 
 	// healthz без auth
@@ -146,7 +170,7 @@ func TestAuthFlow(t *testing.T) {
 
 // TestIngest проверяет авторизацию агентов и попадание метрик в буфер.
 func TestIngest(t *testing.T) {
-	srv, buf := newTestServer(t)
+	srv, buf := newTestServer(t, nil)
 	client := &http.Client{}
 
 	snap := map[string]any{
@@ -181,7 +205,7 @@ func TestIngest(t *testing.T) {
 
 // TestRequireSession: закрытые эндпоинты недоступны без cookie.
 func TestRequireSession(t *testing.T) {
-	srv, _ := newTestServer(t)
+	srv, _ := newTestServer(t, nil)
 	resp, _ := http.Get(srv.URL + "/api/v1/cluster")
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("cluster w/o session: want 401, got %d", resp.StatusCode)

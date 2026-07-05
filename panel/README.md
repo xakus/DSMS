@@ -17,6 +17,14 @@ Backend-компонент DSMS: REST API + WebSocket, прокси над Docke
 | GET | `/me` | сессия | текущий пользователь |
 | GET | `/cluster` | сессия | сводка кластера |
 | GET | `/nodes` | сессия | ноды + последние live-метрики |
+| GET | `/nodes/{id}` | сессия | детали ноды + задачи |
+| POST | `/nodes/{id}/role` | сессия | promote/demote (guard: последний manager) |
+| POST | `/nodes/{id}/availability` | сессия | active/pause/drain (guard: последний активный manager) |
+| PUT | `/nodes/{id}/labels` | сессия | полная замена labels |
+| DELETE | `/nodes/{id}?force=` | сессия | удаление (без force — только down) |
+| GET | `/swarm/join-tokens` | сессия | join-токены + адрес manager |
+| POST | `/swarm/join-tokens/rotate` | сессия | ротация токенов |
+| GET | `/metrics/nodes/{id}` | сессия | live-окно метрик (история — этап 7) |
 | GET | `/ws` | сессия | WebSocket (топики metrics/logs/events/alerts) |
 | POST | `/ingest` | X-Agent-Token | приём метрик от агентов |
 
