@@ -2,6 +2,7 @@
 #
 # Установка:
 #   openssl rand -hex 32 | docker secret create agent_token -
+#   openssl rand -hex 32 | docker secret create encryption_key -
 #   docker stack deploy -c dsms.yml dsms
 #
 # ВАЖНО (безопасность, FR-07 3.7.5): panel НЕ публикует порт наружу.
@@ -21,7 +22,7 @@ services:
     environment:
       - DSMS_LISTEN=:9000
       - DSMS_DB=/data/dsms.db
-    secrets: [agent_token]
+    secrets: [agent_token, encryption_key]
     deploy:
       placement:
         constraints: [node.role == manager]
@@ -60,4 +61,8 @@ volumes:
 
 secrets:
   agent_token:
+    external: true
+  # AES-ключ для паролей приватных реестров (FR-13):
+  #   openssl rand -hex 32 | docker secret create encryption_key -
+  encryption_key:
     external: true

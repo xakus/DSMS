@@ -14,6 +14,7 @@ import (
 
 	"github.com/xakus/DSMS/panel/internal/auth"
 	"github.com/xakus/DSMS/panel/internal/config"
+	"github.com/xakus/DSMS/panel/internal/crypto"
 	"github.com/xakus/DSMS/panel/internal/metrics"
 	"github.com/xakus/DSMS/panel/internal/store"
 	"github.com/xakus/DSMS/panel/internal/ws"
@@ -33,6 +34,12 @@ type DockerAPI interface {
 	SwarmInspect(ctx context.Context) (swarm.Swarm, error)
 	RotateJoinTokens(ctx context.Context) error
 	NodeTasks(ctx context.Context, nodeID string) ([]swarm.Task, error)
+	ServiceInspect(ctx context.Context, id string) (swarm.Service, error)
+	ServiceUpdate(ctx context.Context, id string, version swarm.Version,
+		spec swarm.ServiceSpec, registryAuth, rollback string) ([]string, error)
+	ServiceRemove(ctx context.Context, id string) error
+	ServiceTasks(ctx context.Context, serviceID string) ([]swarm.Task, error)
+	Tasks(ctx context.Context) ([]swarm.Task, error)
 }
 
 // Deps — зависимости API-слоя, собираются в main.
@@ -43,6 +50,9 @@ type Deps struct {
 	Buffer   *metrics.ClusterBuffer
 	Hub      *ws.Hub
 	Sessions *auth.Manager
+	// Crypto — шифрование паролей реестров (FR-13).
+	// nil — ключ не задан, registries API отвечает 503.
+	Crypto *crypto.Box
 }
 
 // NewRouter собирает chi-роутер: API + встроенная SPA.
@@ -83,6 +93,28 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/swarm/join-tokens", h.joinTokens)
 			r.Post("/swarm/join-tokens/rotate", h.rotateJoinTokens)
 			r.Get("/metrics/nodes/{id}", h.nodeMetrics)
+
+			// --- сервисы (FR-04) ---
+			r.Get("/services", h.services)
+			r.Get("/services/{id}", h.serviceDetail)
+			r.Post("/services/{id}/scale", h.serviceScale)
+			r.Post("/services/{id}/start", h.serviceStart)
+			r.Post("/services/{id}/redeploy", h.serviceRedeploy)
+			r.Post("/services/{id}/image", h.serviceImage)
+			r.Post("/services/{id}/rollback", h.serviceRollback)
+			r.Delete("/services/{id}", h.serviceRemove)
+
+			// --- стеки (FR-08) ---
+			r.Get("/stacks", h.stacks)
+			r.Get("/stacks/{name}", h.stackDetail)
+			r.Post("/stacks/{name}/redeploy", h.stackRedeploy)
+			r.Delete("/stacks/{name}", h.stackRemove)
+
+			// --- реестры (FR-13) ---
+			r.Get("/registries", h.registries)
+			r.Post("/registries", h.registryCreate)
+			r.Put("/registries/{id}", h.registryUpdate)
+			r.Delete("/registries/{id}", h.registryDelete)
 		})
 	})
 

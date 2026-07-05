@@ -17,6 +17,7 @@ import (
 	"github.com/xakus/DSMS/panel/internal/api"
 	"github.com/xakus/DSMS/panel/internal/auth"
 	"github.com/xakus/DSMS/panel/internal/config"
+	"github.com/xakus/DSMS/panel/internal/crypto"
 	"github.com/xakus/DSMS/panel/internal/dockerapi"
 	"github.com/xakus/DSMS/panel/internal/metrics"
 	"github.com/xakus/DSMS/panel/internal/store"
@@ -60,6 +61,18 @@ func main() {
 	// Менеджер сессий и аутентификации (FR-07).
 	sessions := auth.NewManager(db, cfg.SessionTTL)
 
+	// Шифрование паролей реестров (FR-13); без ключа фича отключена.
+	var box *crypto.Box
+	if cfg.EncryptionKey != "" {
+		box, err = crypto.NewBox(cfg.EncryptionKey)
+		if err != nil {
+			slog.Error("encryption key invalid", "err", err)
+			os.Exit(1)
+		}
+	} else {
+		slog.Warn("DSMS_ENCRYPTION_KEY not set: registry credentials disabled")
+	}
+
 	router := api.NewRouter(api.Deps{
 		Cfg:      cfg,
 		Store:    db,
@@ -67,6 +80,7 @@ func main() {
 		Buffer:   buf,
 		Hub:      hub,
 		Sessions: sessions,
+		Crypto:   box,
 	})
 
 	srv := &http.Server{

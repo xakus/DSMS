@@ -12,7 +12,41 @@
     "submit": "Создать администратора"
   },
   "nav": {
-    "dashboard": "Обзор"
+    "dashboard": "Обзор",
+    "services": "Сервисы",
+    "stacks": "Стеки",
+    "settings": "Настройки"
+  },
+  "services": {
+    "name": "Имя",
+    "stack": "Стек",
+    "replicas": "Реплики",
+    "ports": "Порты",
+    "node": "Нода",
+    "tasks": "Задачи",
+    "spec": "Спецификация",
+    "created": "Создана",
+    "stopConfirm": "Остановить сервис {name}? (scale 0, реплики будут запомнены)",
+    "redeployConfirm": "Принудительно передеплоить {name}?",
+    "rollbackConfirm": "Откатить {name} на предыдущую спецификацию?",
+    "removeTitle": "Удаление сервиса",
+    "removeHint": "Введите имя сервиса «{name}» для подтверждения удаления."
+  },
+  "stacks": {
+    "name": "Стек",
+    "services": "Сервисы",
+    "redeployConfirm": "Принудительно передеплоить все сервисы стека {name}?",
+    "removeTitle": "Удаление стека",
+    "removeHint": "Будут удалены все сервисы стека ({count} шт.). Введите «{name}» для подтверждения."
+  },
+  "settings": {
+    "registries": "Реестры",
+    "addRegistry": "Добавить реестр",
+    "regAddress": "Адрес",
+    "regUser": "Пользователь",
+    "regPassword": "Пароль / токен",
+    "regKeepPassword": "пусто — оставить текущий",
+    "regLabel": "Метка"
   },
   "common": {
     "confirm": "Подтвердить",

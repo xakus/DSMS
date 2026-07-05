@@ -21,9 +21,12 @@ const auth = useAuthStore()
 const theme = useThemeStore()
 const metrics = useMetricsStore()
 
-// Пункты меню. Экраны этапов 3+ добавляются сюда по мере реализации.
+// Пункты меню. Экраны этапов 4+ добавляются сюда по мере реализации.
 const menu = computed<MenuOption[]>(() => [
   { label: () => h(RouterLink, { to: { name: 'dashboard' } }, { default: () => t('nav.dashboard') }), key: 'dashboard' },
+  { label: () => h(RouterLink, { to: { name: 'services' } }, { default: () => t('nav.services') }), key: 'services' },
+  { label: () => h(RouterLink, { to: { name: 'stacks' } }, { default: () => t('nav.stacks') }), key: 'stacks' },
+  { label: () => h(RouterLink, { to: { name: 'settings' } }, { default: () => t('nav.settings') }), key: 'settings' },
 ])
 
 /** Языки интерфейса (разд. 6.1: EN базовый, RU; AZ добавится тривиально). */

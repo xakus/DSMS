@@ -16,6 +16,7 @@ type fakeDocker struct {
 	swarm    swarm.Swarm
 	rotated  bool // был ли вызван RotateJoinTokens
 	removed  []string
+	updates  []lastUpdate // история ServiceUpdate
 }
 
 func (f *fakeDocker) Ping(ctx context.Context) error { return nil }
@@ -65,6 +66,76 @@ func (f *fakeDocker) NodeTasks(ctx context.Context, nodeID string) ([]swarm.Task
 		}
 	}
 	return out, nil
+}
+
+func (f *fakeDocker) ServiceInspect(ctx context.Context, id string) (swarm.Service, error) {
+	for _, s := range f.services {
+		if s.ID == id {
+			return s, nil
+		}
+	}
+	return swarm.Service{}, errors.New("no such service")
+}
+
+// lastUpdate — параметры последнего ServiceUpdate (для проверок в тестах).
+type lastUpdate struct {
+	ID           string
+	Spec         swarm.ServiceSpec
+	RegistryAuth string
+	Rollback     string
+}
+
+func (f *fakeDocker) ServiceUpdate(ctx context.Context, id string, version swarm.Version,
+	spec swarm.ServiceSpec, registryAuth, rollback string) ([]string, error) {
+	for i := range f.services {
+		if f.services[i].ID == id {
+			f.services[i].Spec = spec
+			f.updates = append(f.updates, lastUpdate{ID: id, Spec: spec, RegistryAuth: registryAuth, Rollback: rollback})
+			return nil, nil
+		}
+	}
+	return nil, errors.New("no such service")
+}
+
+func (f *fakeDocker) ServiceRemove(ctx context.Context, id string) error {
+	for i := range f.services {
+		if f.services[i].ID == id {
+			f.services = append(f.services[:i], f.services[i+1:]...)
+			return nil
+		}
+	}
+	return errors.New("no such service")
+}
+
+func (f *fakeDocker) ServiceTasks(ctx context.Context, serviceID string) ([]swarm.Task, error) {
+	out := []swarm.Task{}
+	for _, t := range f.tasks {
+		if t.ServiceID == serviceID {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeDocker) Tasks(ctx context.Context) ([]swarm.Task, error) { return f.tasks, nil }
+
+// mkService — конструктор тестового replicated-сервиса.
+func mkService(id, name, image string, replicas uint64, stack string) swarm.Service {
+	labels := map[string]string{}
+	if stack != "" {
+		labels["com.docker.stack.namespace"] = stack
+	}
+	r := replicas
+	return swarm.Service{
+		ID: id,
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: name, Labels: labels},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{Image: image},
+			},
+			Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &r}},
+		},
+	}
 }
 
 // mkNode — конструктор тестовой ноды.

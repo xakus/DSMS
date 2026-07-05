@@ -90,3 +90,64 @@ export interface ClusterSummary {
   nodes_ready: number
   services: number
 }
+
+/** Сервис в таблице /services (3.4.1). */
+export interface ServiceInfo {
+  id: string
+  name: string
+  image: string
+  mode: 'replicated' | 'global'
+  running: number
+  desired: number
+  stack: string
+  ports?: string[]
+  labels: Record<string, string>
+  update_state?: string
+  stopped: boolean
+}
+
+/** Задача сервиса с историей (3.4.4). */
+export interface ServiceTask {
+  id: string
+  slot: number
+  node: string
+  state: string
+  desired: string
+  message: string
+  exit_code?: number
+  created_at: string
+}
+
+/** Детали сервиса (/services/{id}). */
+export interface ServiceDetail {
+  id: string
+  name: string
+  stack: string
+  mode: string
+  spec: {
+    image: string
+    env?: string[]
+    mounts?: string[]
+    constraints?: string[]
+    labels?: Record<string, string>
+    limits?: { cpus?: number; memory?: number }
+  }
+  tasks: ServiceTask[]
+  update?: { state: string; message: string } | null
+}
+
+/** Стек в списке /stacks (3.8.1). */
+export interface StackInfo {
+  name: string
+  services: number
+  running: number
+  desired: number
+}
+
+/** Реестр (FR-13); пароль никогда не приходит с сервера. */
+export interface RegistryInfo {
+  id: number
+  address: string
+  username: string
+  label: string
+}

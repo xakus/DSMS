@@ -275,7 +275,8 @@
 | POST | `/swarm/join-tokens/rotate` | ротация |
 | GET | `/services` | список сервисов + статус реплик |
 | GET | `/services/{id}` | спецификация + задачи |
-| POST | `/services/{id}/scale` | `{replicas: n}` |
+| POST | `/services/{id}/scale` | `{replicas: n}` (0 = Stop, реплики запоминаются) |
+| POST | `/services/{id}/start` | Start: scale обратно к запомненным репликам (3.4.3) |
 | POST | `/services/{id}/redeploy` | force update |
 | POST | `/services/{id}/image` | `{image, registry_id?}` — смена образа с registry auth (FR-13) |
 | POST | `/services/{id}/rollback` | откат |

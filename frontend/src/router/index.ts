@@ -9,7 +9,11 @@ export const router = createRouter({
     { path: '/setup', name: 'setup', component: () => import('../views/SetupView.vue') },
     { path: '/', name: 'dashboard', component: () => import('../views/DashboardView.vue') },
     { path: '/nodes/:id', name: 'node', component: () => import('../views/NodeDetailView.vue') },
-    // Остальные экраны (services, stacks, logs, ...) — этапы 3+.
+    { path: '/services', name: 'services', component: () => import('../views/ServicesView.vue') },
+    { path: '/services/:id', name: 'service', component: () => import('../views/ServiceDetailView.vue') },
+    { path: '/stacks', name: 'stacks', component: () => import('../views/StacksView.vue') },
+    { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
+    // Остальные экраны (logs, events, resources, alerts) — этапы 4+.
   ],
 })
 

@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/xakus/DSMS/panel/internal/auth"
 	"github.com/xakus/DSMS/panel/internal/config"
+	"github.com/xakus/DSMS/panel/internal/crypto"
 	"github.com/xakus/DSMS/panel/internal/metrics"
 	"github.com/xakus/DSMS/panel/internal/store"
 	"github.com/xakus/DSMS/panel/internal/ws"
@@ -35,6 +37,12 @@ func newTestServer(t *testing.T, docker *fakeDocker) (*httptest.Server, *metrics
 	cfg := &config.Config{AgentToken: "test-token", SessionTTL: time.Hour, CookieSecure: false}
 	buf := metrics.NewClusterBuffer(15*time.Minute, 3*time.Second)
 
+	// Тестовый ключ шифрования (32 байта) для registries (FR-13).
+	box, err := crypto.NewBox(strings.Repeat("ab", 32))
+	if err != nil {
+		t.Fatalf("crypto: %v", err)
+	}
+
 	srv := httptest.NewServer(NewRouter(Deps{
 		Cfg:      cfg,
 		Store:    db,
@@ -42,6 +50,7 @@ func newTestServer(t *testing.T, docker *fakeDocker) (*httptest.Server, *metrics
 		Buffer:   buf,
 		Hub:      ws.NewHub(),
 		Sessions: auth.NewManager(db, cfg.SessionTTL),
+		Crypto:   box,
 	}))
 	t.Cleanup(srv.Close)
 	return srv, buf

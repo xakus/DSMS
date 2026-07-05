@@ -35,6 +35,9 @@ type Config struct {
 	// CookieSecure — флаг Secure на сессионной cookie (3.7.2).
 	// Выключается только для локальной разработки без TLS: DSMS_COOKIE_INSECURE=1.
 	CookieSecure bool
+	// EncryptionKey — hex-ключ AES-256 для паролей реестров (FR-13, 3.7.9).
+	// Docker secret (файл) → env DSMS_ENCRYPTION_KEY. Пустой — registries API отключён.
+	EncryptionKey string
 }
 
 // Load собирает конфигурацию из окружения и секретов.
@@ -52,6 +55,14 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("agent token: %w", err)
 	}
 	cfg.AgentToken = token
+
+	// Ключ шифрования: Docker secret → env (как agent token).
+	keyPath := envOr("DSMS_ENCRYPTION_KEY_FILE", "/run/secrets/encryption_key")
+	if b, err := os.ReadFile(keyPath); err == nil {
+		cfg.EncryptionKey = strings.TrimSpace(string(b))
+	} else {
+		cfg.EncryptionKey = strings.TrimSpace(os.Getenv("DSMS_ENCRYPTION_KEY"))
+	}
 
 	return cfg, nil
 }

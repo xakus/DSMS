@@ -12,7 +12,41 @@
     "submit": "Create admin"
   },
   "nav": {
-    "dashboard": "Dashboard"
+    "dashboard": "Dashboard",
+    "services": "Services",
+    "stacks": "Stacks",
+    "settings": "Settings"
+  },
+  "services": {
+    "name": "Name",
+    "stack": "Stack",
+    "replicas": "Replicas",
+    "ports": "Ports",
+    "node": "Node",
+    "tasks": "Tasks",
+    "spec": "Specification",
+    "created": "Created",
+    "stopConfirm": "Stop service {name}? (scale to 0, replicas will be remembered)",
+    "redeployConfirm": "Force redeploy {name}?",
+    "rollbackConfirm": "Rollback {name} to previous spec?",
+    "removeTitle": "Remove service",
+    "removeHint": "Type the service name «{name}» to confirm removal."
+  },
+  "stacks": {
+    "name": "Stack",
+    "services": "Services",
+    "redeployConfirm": "Force redeploy all services of stack {name}?",
+    "removeTitle": "Remove stack",
+    "removeHint": "This removes all {count} services of the stack. Type «{name}» to confirm."
+  },
+  "settings": {
+    "registries": "Registries",
+    "addRegistry": "Add registry",
+    "regAddress": "Address",
+    "regUser": "Username",
+    "regPassword": "Password / token",
+    "regKeepPassword": "leave empty to keep current",
+    "regLabel": "Label"
   },
   "common": {
     "confirm": "Confirm",
