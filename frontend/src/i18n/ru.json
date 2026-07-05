@@ -15,7 +15,24 @@
     "dashboard": "Обзор",
     "services": "Сервисы",
     "stacks": "Стеки",
+    "logs": "Логи",
+    "events": "События",
     "settings": "Настройки"
+  },
+  "logs": {
+    "selectService": "Выберите сервис",
+    "filter": "Фильтр…"
+  },
+  "events": {
+    "events": "События",
+    "audit": "Журнал",
+    "time": "Время",
+    "type": "Тип",
+    "action": "Действие",
+    "object": "Объект",
+    "user": "Пользователь",
+    "details": "Детали",
+    "loadMore": "Загрузить ещё"
   },
   "services": {
     "name": "Имя",

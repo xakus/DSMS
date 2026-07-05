@@ -151,3 +151,36 @@ func (s *Store) AppendAudit(userID int64, action, objectType, objectID, detailsJ
 	)
 	return err
 }
+
+// AuditEntry — запись журнала с именем пользователя (join users).
+type AuditEntry struct {
+	ID         int64  `json:"id"`
+	TS         int64  `json:"ts"`
+	Username   string `json:"username"`
+	Action     string `json:"action"`
+	ObjectType string `json:"object_type"`
+	ObjectID   string `json:"object_id"`
+	Details    string `json:"details"`
+}
+
+// AuditEntries возвращает журнал действий, свежие первыми (3.6.2).
+func (s *Store) AuditEntries(limit, offset int) ([]AuditEntry, error) {
+	rows, err := s.db.Query(
+		`SELECT a.id, a.ts, COALESCE(u.username, '?'), a.action, a.object_type,
+		        COALESCE(a.object_id, ''), COALESCE(a.details_json, '')
+		 FROM audit a LEFT JOIN users u ON u.id = a.user_id
+		 ORDER BY a.id DESC LIMIT ? OFFSET ?`, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AuditEntry{}
+	for rows.Next() {
+		var e AuditEntry
+		if err := rows.Scan(&e.ID, &e.TS, &e.Username, &e.Action, &e.ObjectType, &e.ObjectID, &e.Details); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}

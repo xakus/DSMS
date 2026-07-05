@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/xakus/DSMS/panel/internal/auth"
@@ -233,4 +234,21 @@ func (h *handlers) nodes(w http.ResponseWriter, r *http.Request) {
 // websocket — апгрейд соединения в hub (только под сессией).
 func (h *handlers) websocket(w http.ResponseWriter, r *http.Request) {
 	h.Hub.Handle(w, r)
+}
+
+// audit — GET /audit?limit=&offset=: журнал действий (3.6.2).
+func (h *handlers) audit(w http.ResponseWriter, r *http.Request) {
+	limit, offset := 100, 0
+	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 && v <= 500 {
+		limit = v
+	}
+	if v, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && v >= 0 {
+		offset = v
+	}
+	entries, err := h.Store.AuditEntries(limit, offset)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "storage error")
+		return
+	}
+	writeJSON(w, entries)
 }

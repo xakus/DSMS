@@ -63,11 +63,54 @@ func (c *client) setSub(key subKey, on bool) {
 type Hub struct {
 	mu      sync.RWMutex
 	clients map[*client]bool
+	// subCount — сколько клиентов подписано на каждый ключ:
+	// нужен для запуска/остановки стримов логов по требованию (FR-05).
+	subCount map[subKey]int
+
+	// OnFirstSub вызывается, когда на ключ появился первый подписчик
+	// (например: запустить стрим логов сервиса). Может быть nil.
+	OnFirstSub func(topic, service string, tail int)
+	// OnLastUnsub вызывается, когда отписался последний подписчик
+	// (остановить стрим). Может быть nil.
+	OnLastUnsub func(topic, service string)
 }
 
 // NewHub создаёт пустой hub.
 func NewHub() *Hub {
-	return &Hub{clients: make(map[*client]bool)}
+	return &Hub{
+		clients:  make(map[*client]bool),
+		subCount: make(map[subKey]int),
+	}
+}
+
+// HasSubscribers — есть ли живые подписчики на ключ (для backpressure).
+func (h *Hub) HasSubscribers(topic, service string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.subCount[subKey{topic: topic, service: service}] > 0
+}
+
+// incSub увеличивает счётчик подписки; true — это первый подписчик.
+func (h *Hub) incSub(key subKey) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.subCount[key]++
+	return h.subCount[key] == 1
+}
+
+// decSub уменьшает счётчик; true — подписчиков не осталось.
+func (h *Hub) decSub(key subKey) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.subCount[key] == 0 {
+		return false
+	}
+	h.subCount[key]--
+	if h.subCount[key] == 0 {
+		delete(h.subCount, key)
+		return true
+	}
+	return false
 }
 
 // Broadcast шлёт payload всем подписчикам ключа {topic, service}.
@@ -120,6 +163,18 @@ func (h *Hub) Handle(w http.ResponseWriter, r *http.Request) {
 		h.mu.Lock()
 		delete(h.clients, c)
 		h.mu.Unlock()
+		// Отписка всех ключей клиента — иначе стримы логов зависнут навсегда.
+		c.mu.Lock()
+		keys := make([]subKey, 0, len(c.subs))
+		for k := range c.subs {
+			keys = append(keys, k)
+		}
+		c.mu.Unlock()
+		for _, k := range keys {
+			if h.decSub(k) && h.OnLastUnsub != nil {
+				h.OnLastUnsub(k.topic, k.service)
+			}
+		}
 		conn.Close(websocket.StatusNormalClosure, "")
 	}()
 
@@ -158,9 +213,19 @@ func (h *Hub) Handle(w http.ResponseWriter, r *http.Request) {
 		key := subKey{topic: op.Topic, service: op.Service}
 		switch op.Op {
 		case "sub":
-			c.setSub(key, true)
+			if !c.subscribed(key) {
+				c.setSub(key, true)
+				if h.incSub(key) && h.OnFirstSub != nil {
+					h.OnFirstSub(op.Topic, op.Service, op.Tail)
+				}
+			}
 		case "unsub":
-			c.setSub(key, false)
+			if c.subscribed(key) {
+				c.setSub(key, false)
+				if h.decSub(key) && h.OnLastUnsub != nil {
+					h.OnLastUnsub(op.Topic, op.Service)
+				}
+			}
 		}
 	}
 }

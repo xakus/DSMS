@@ -12,8 +12,10 @@ export const router = createRouter({
     { path: '/services', name: 'services', component: () => import('../views/ServicesView.vue') },
     { path: '/services/:id', name: 'service', component: () => import('../views/ServiceDetailView.vue') },
     { path: '/stacks', name: 'stacks', component: () => import('../views/StacksView.vue') },
+    { path: '/logs', name: 'logs', component: () => import('../views/LogsView.vue') },
+    { path: '/events', name: 'events', component: () => import('../views/EventsView.vue') },
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
-    // Остальные экраны (logs, events, resources, alerts) — этапы 4+.
+    // Остальные экраны (resources, alerts) — этапы 5+.
   ],
 })
 

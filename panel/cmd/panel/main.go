@@ -21,6 +21,7 @@ import (
 	"github.com/xakus/DSMS/panel/internal/dockerapi"
 	"github.com/xakus/DSMS/panel/internal/metrics"
 	"github.com/xakus/DSMS/panel/internal/store"
+	"github.com/xakus/DSMS/panel/internal/streams"
 	"github.com/xakus/DSMS/panel/internal/ws"
 )
 
@@ -58,6 +59,19 @@ func main() {
 	// WebSocket-hub: рассылка метрик/логов/событий/алертов подписчикам.
 	hub := ws.NewHub()
 
+	// Стримы логов (FR-05): запуск по первой подписке, остановка с последней.
+	logStreamer := streams.NewLogStreamer(docker, hub)
+	hub.OnFirstSub = func(topic, service string, tail int) {
+		if topic == "logs" && service != "" {
+			logStreamer.Start(service, tail)
+		}
+	}
+	hub.OnLastUnsub = func(topic, service string) {
+		if topic == "logs" && service != "" {
+			logStreamer.Stop(service)
+		}
+	}
+
 	// Менеджер сессий и аутентификации (FR-07).
 	sessions := auth.NewManager(db, cfg.SessionTTL)
 
@@ -92,6 +106,9 @@ func main() {
 	// Graceful shutdown по SIGINT/SIGTERM.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Лента Docker events → WS topic "events" (FR-06), с реконнектом (NFR-5).
+	go streams.RunEvents(ctx, docker, hub)
 
 	go func() {
 		slog.Info("panel listening", "addr", cfg.Listen)

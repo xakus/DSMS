@@ -15,7 +15,24 @@
     "dashboard": "Dashboard",
     "services": "Services",
     "stacks": "Stacks",
+    "logs": "Logs",
+    "events": "Events",
     "settings": "Settings"
+  },
+  "logs": {
+    "selectService": "Select a service",
+    "filter": "Filter…"
+  },
+  "events": {
+    "events": "Events",
+    "audit": "Audit",
+    "time": "Time",
+    "type": "Type",
+    "action": "Action",
+    "object": "Object",
+    "user": "User",
+    "details": "Details",
+    "loadMore": "Load more"
   },
   "services": {
     "name": "Name",

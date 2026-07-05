@@ -4,7 +4,7 @@
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NCard, NDataTable, NTag, NSpace, NDescriptions, NDescriptionsItem, useMessage } from 'naive-ui'
+import { NCard, NDataTable, NTag, NSpace, NButton, NDescriptions, NDescriptionsItem, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import AppLayout from '../components/AppLayout.vue'
 import { api } from '../api/client'
@@ -57,11 +57,17 @@ const taskColumns = computed<DataTableColumns<ServiceTask>>(() => [
 <template>
   <AppLayout>
     <template v-if="svc">
-      <n-space align="center" class="mb">
-        <h2>{{ svc.name }}</h2>
-        <n-tag :bordered="false">{{ svc.mode }}</n-tag>
-        <n-tag v-if="svc.stack" :bordered="false" type="info">{{ svc.stack }}</n-tag>
-        <n-tag v-if="svc.update" :bordered="false" type="warning">⟳ {{ svc.update.state }}</n-tag>
+      <n-space align="center" justify="space-between" class="mb">
+        <n-space align="center">
+          <h2>{{ svc.name }}</h2>
+          <n-tag :bordered="false">{{ svc.mode }}</n-tag>
+          <n-tag v-if="svc.stack" :bordered="false" type="info">{{ svc.stack }}</n-tag>
+          <n-tag v-if="svc.update" :bordered="false" type="warning">⟳ {{ svc.update.state }}</n-tag>
+        </n-space>
+        <!-- Вкладка Logs страницы сервиса (3.5) — переход на экран логов -->
+        <n-button size="small" @click="$router.push({ name: 'logs', query: { service: svc.id } })">
+          📜 {{ t('nav.logs') }}
+        </n-button>
       </n-space>
 
       <!-- Спецификация read-only (3.4.4) -->

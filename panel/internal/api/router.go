@@ -110,6 +110,9 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/stacks/{name}/redeploy", h.stackRedeploy)
 			r.Delete("/stacks/{name}", h.stackRemove)
 
+			// --- журнал действий (FR-06) ---
+			r.Get("/audit", h.audit)
+
 			// --- реестры (FR-13) ---
 			r.Get("/registries", h.registries)
 			r.Post("/registries", h.registryCreate)
