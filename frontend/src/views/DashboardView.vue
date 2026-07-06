@@ -4,7 +4,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  NCard, NStatistic, NSpace, NButton, NGrid, NGi, NModal,
+  NCard, NStatistic, NSpace, NButton, NModal,
   NInput, NTabs, NTabPane, NIcon, useMessage, useDialog,
 } from 'naive-ui'
 import { CopyOutline, RefreshOutline } from '@vicons/ionicons5'
@@ -91,21 +91,20 @@ function rotate() {
   <AppLayout>
     <n-space justify="space-between" align="center" class="mb">
       <h2>{{ t('dashboard.title') }}</h2>
+      <!-- Кнопка остаётся у правого края страницы -->
       <n-button type="primary" @click="openAddNode">+ {{ t('nodes.addNode') }}</n-button>
     </n-space>
 
-    <!-- Сводка кластера (3.1.3) -->
-    <n-space v-if="summary" class="mb">
-      <n-card><n-statistic :label="t('dashboard.nodes')" :value="`${summary.nodes_ready}/${summary.nodes}`" /></n-card>
-      <n-card><n-statistic :label="t('dashboard.services')" :value="summary.services" /></n-card>
-    </n-space>
+    <!-- Сводка кластера (3.1.3) — по центру -->
+    <div v-if="summary" class="summary-row mb">
+      <n-card class="stat-card"><n-statistic :label="t('dashboard.nodes')" :value="`${summary.nodes_ready}/${summary.nodes}`" /></n-card>
+      <n-card class="stat-card"><n-statistic :label="t('dashboard.services')" :value="summary.services" /></n-card>
+    </div>
 
-    <!-- Сетка карточек нод (3.1.1) -->
-    <n-grid cols="1 s:2 m:3 l:4" responsive="screen" :x-gap="12" :y-gap="12">
-      <n-gi v-for="n in nodes" :key="n.id">
-        <NodeCard :node="n" />
-      </n-gi>
-    </n-grid>
+    <!-- Карточки нод (3.1.1) — по центру, фиксированной ширины, с переносом -->
+    <div class="nodes-row">
+      <NodeCard v-for="n in nodes" :key="n.id" :node="n" class="node-item" />
+    </div>
 
     <!-- Модал Add Node (3.3.4) -->
     <n-modal v-model:show="showAddNode" preset="card" :title="t('nodes.addNode')" class="add-modal">
@@ -139,5 +138,27 @@ function rotate() {
 }
 .add-modal {
   max-width: 640px;
+}
+/* Обзор — контент по центру (остальные страницы — на всю ширину). */
+.summary-row {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.stat-card {
+  width: 180px;
+}
+.nodes-row {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+/* Карточка ноды фиксированной ширины — ровная центрированная сетка. */
+.node-item {
+  width: 440px;
+  max-width: 100%;
+  min-width: 0;
 }
 </style>

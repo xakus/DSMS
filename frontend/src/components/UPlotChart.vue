@@ -160,9 +160,13 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* График растягивается на ширину родителя */
+/* График растягивается на ширину родителя.
+   min-width:0 + overflow:hidden — canvas не распирает контейнер, иначе при
+   сжатии окна график «застревал» на старой ширине и вылезал за блок. */
 .uplot-wrap {
   width: 100%;
+  min-width: 0;
+  overflow: hidden;
   position: relative;
 }
 
