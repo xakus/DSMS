@@ -11,18 +11,30 @@ const theme = useThemeStore()
 // Переопределения общих токенов — единый акцент и мягкий фон в обеих темах.
 // Светлая была слишком белой/неконтрастной, поэтому фон — тёплый серый,
 // карточки остаются белыми и «всплывают» за счёт контраста.
-// Более просторные ячейки таблиц — иначе текст в соседних колонках слипается.
+// Минимальный шрифт в интерфейсе — 14px, базовый крупнее (читаемость).
+const fontTokens = {
+  fontSize: '15px',
+  fontSizeMini: '14px',
+  fontSizeTiny: '14px',
+  fontSizeSmall: '14px',
+  fontSizeMedium: '15px',
+  fontSizeLarge: '16px',
+  fontSizeHuge: '18px',
+}
+// Более просторные ячейки таблиц + читаемый шрифт (не мельче 14px).
 const tableOverrides = {
   DataTable: {
-    thPaddingSmall: '10px 16px',
-    tdPaddingSmall: '10px 16px',
+    thPaddingSmall: '11px 16px',
+    tdPaddingSmall: '11px 16px',
     thPadding: '12px 16px',
     tdPadding: '12px 16px',
-    fontSizeSmall: '13px',
+    fontSizeSmall: '14px',
+    fontSizeMedium: '15px',
   },
 }
 const lightOverrides: GlobalThemeOverrides = {
   common: {
+    ...fontTokens,
     // Насыщенный светло-серый фон + чисто-белые карточки = чёткий контраст.
     bodyColor: '#e6e8ee',
     cardColor: '#ffffff',
@@ -53,6 +65,7 @@ const lightOverrides: GlobalThemeOverrides = {
 // чтобы не появлялось «белесой пелены»).
 const darkOverrides: GlobalThemeOverrides = {
   common: {
+    ...fontTokens,
     primaryColor: '#5b8cff',
     primaryColorHover: '#78a2ff',
     primaryColorPressed: '#3d72f0',

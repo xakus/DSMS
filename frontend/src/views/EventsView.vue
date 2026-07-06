@@ -39,14 +39,24 @@ const MAX_EVENTS = 1000
 
 let unsub: (() => void) | null = null
 
+// Высота живой ленты — почти на весь экран (virtual-scroll требует высоту).
+const tableHeight = ref(window.innerHeight - 260)
+function onResize() {
+  tableHeight.value = window.innerHeight - 260
+}
+
 onMounted(() => {
   unsub = wsClient.subscribe({ topic: 'events' }, (msg) => {
     events.value.unshift(msg as unknown as EventRow)
     if (events.value.length > MAX_EVENTS) events.value.pop()
   })
   loadAudit()
+  window.addEventListener('resize', onResize)
 })
-onBeforeUnmount(() => unsub?.())
+onBeforeUnmount(() => {
+  unsub?.()
+  window.removeEventListener('resize', onResize)
+})
 
 async function loadAudit(more = false) {
   if (!more) auditOffset.value = 0
@@ -87,16 +97,16 @@ const auditColumns = computed<DataTableColumns<AuditRow>>(() => [
   <AppLayout>
     <n-card size="small">
       <n-tabs type="line">
-        <!-- Живая лента Docker events (3.6.1) -->
+        <!-- Живая лента Docker events (3.6.1) — на высоту экрана -->
         <n-tab-pane name="events" :tab="t('events.events')">
           <n-data-table :columns="eventColumns" :data="events" size="small" :bordered="false"
-                        :max-height="600" virtual-scroll :row-key="(r: EventRow) => r.ts + r.actor + r.action" />
+                        :max-height="tableHeight" virtual-scroll :row-key="(r: EventRow) => r.ts + r.actor + r.action" />
         </n-tab-pane>
-        <!-- Журнал действий пользователя (3.6.2) -->
+        <!-- Журнал действий пользователя (3.6.2) — по контенту + «загрузить ещё» -->
         <n-tab-pane name="audit" :tab="t('events.audit')">
           <n-space vertical>
             <n-data-table :columns="auditColumns" :data="audit" size="small" :bordered="false"
-                          :max-height="600" :row-key="(r: AuditRow) => r.id" />
+                          :row-key="(r: AuditRow) => r.id" />
             <n-space justify="center">
               <n-button size="small" quaternary @click="loadAudit(true)">{{ t('events.loadMore') }}</n-button>
             </n-space>

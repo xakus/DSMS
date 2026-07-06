@@ -148,11 +148,11 @@ watch([serviceId, tail], subscribe)
   background: #0c0c0c;
   color: #d8d8d8;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  height: calc(100vh - 220px);
+  font-size: 13.5px;
+  line-height: 1.55;
+  height: calc(100vh - 210px);
   overflow-y: auto;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 4px;
   white-space: pre-wrap;
   word-break: break-all;

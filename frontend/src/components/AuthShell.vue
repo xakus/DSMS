@@ -33,7 +33,7 @@ const theme = useThemeStore()
           <n-icon :component="CubeOutline" :size="30" />
         </div>
         <div class="brand-name">DSMS</div>
-        <div class="brand-sub">{{ subtitle ?? 'Docker Swarm Management' }}</div>
+        <div class="brand-sub">{{ subtitle ?? 'Docker Swarm Management System' }}</div>
       </div>
       <slot />
     </div>
@@ -88,7 +88,7 @@ const theme = useThemeStore()
   animation: float3 24s ease-in-out infinite;
 }
 :global(:root[data-theme='dark']) .blob {
-  opacity: 0.35;
+  opacity: 0.28;
 }
 @keyframes float1 {
   0%, 100% { transform: translate(0, 0) scale(1); }
@@ -103,25 +103,24 @@ const theme = useThemeStore()
   50% { transform: translate(30px, -50px) scale(1.2); }
 }
 
-/* --- Стеклянная карточка с появлением --- */
+/* --- Карточка входа: НЕПРОЗРАЧНЫЙ фон по теме, без стекла ---
+   (backdrop-blur давал «туман» в светлой теме и артефакты при переходе). */
 .auth-card {
   position: relative;
   z-index: 1;
-  width: 380px;
+  width: 400px;
   max-width: calc(100vw - 32px);
-  padding: 36px 32px 32px;
+  padding: 40px 36px 36px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: #ffffff;
+  border: 1px solid rgba(20, 23, 33, 0.08);
   box-shadow: 0 20px 50px rgba(20, 23, 33, 0.18);
   animation: card-in 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 :global(:root[data-theme='dark']) .auth-card {
-  background: rgba(26, 28, 36, 0.66);
+  background: #1a1c22;
   border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
 }
 @keyframes card-in {
   from { opacity: 0; transform: translateY(24px) scale(0.98); }

@@ -93,8 +93,11 @@ async function logout() {
 
 <template>
   <n-layout has-sider class="app-root">
-    <n-layout-sider bordered collapse-mode="width" :width="200" :collapsed-width="0" show-trigger="bar">
-      <div class="logo">DSMS</div>
+    <n-layout-sider bordered collapse-mode="width" :width="220" :collapsed-width="0" show-trigger="bar">
+      <div class="logo">
+        <span class="logo-name">DSMS</span>
+        <span class="logo-full">Docker Swarm Management System</span>
+      </div>
       <n-menu :options="menu" :value="String(route.name)" />
     </n-layout-sider>
     <n-layout>
@@ -117,7 +120,11 @@ async function logout() {
         </n-space>
       </n-layout-header>
       <n-layout-content class="content">
-        <slot />
+        <!-- Контент центрируется и ограничивается по ширине — на больших
+             экранах не прижимается к левому краю. -->
+        <div class="content-inner">
+          <slot />
+        </div>
       </n-layout-content>
     </n-layout>
   </n-layout>
@@ -129,15 +136,33 @@ async function logout() {
   height: 100vh;
 }
 .logo {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.logo-name {
   font-weight: 700;
-  font-size: 18px;
-  padding: 16px;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+.logo-full {
+  font-size: 10px;
+  line-height: 1.3;
+  opacity: 0.55;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 .header {
   padding: 8px 16px;
 }
 .content {
-  padding: 16px 24px;
+  padding: 20px 24px;
+}
+/* Центрирование и ограничение ширины контента на широких экранах. */
+.content-inner {
+  max-width: 1400px;
+  margin: 0 auto;
 }
 .lang {
   width: 72px;

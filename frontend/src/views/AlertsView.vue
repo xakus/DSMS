@@ -55,7 +55,7 @@ const columns = computed<DataTableColumns<AlertItem>>(() => [
             <n-select v-model:value="ruleFilter" :options="ruleOptions" clearable
                       :placeholder="t('alerts.filterRule')" class="rule-filter" />
             <n-data-table :columns="columns" :data="filteredHistory" size="small" :bordered="false"
-                          :max-height="560" :row-key="(r: AlertItem) => `${r.id}-${r.state}`" />
+                          :row-key="(r: AlertItem) => `${r.id}-${r.state}`" />
           </n-space>
         </n-tab-pane>
       </n-tabs>
