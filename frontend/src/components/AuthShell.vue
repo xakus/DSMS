@@ -119,12 +119,16 @@ const theme = useThemeStore()
   padding: 40px 36px 36px;
   border-radius: 18px;
   background: #ffffff;
+  /* Цвет текста задаём явно — карточка это div, Naive его не красит,
+     иначе мои подписи (под логотипом, подсказки) остаются чёрными в тёмной. */
+  color: #171a21;
   border: 1px solid rgba(20, 23, 33, 0.08);
   box-shadow: 0 20px 50px rgba(20, 23, 33, 0.18);
   animation: card-in 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .auth-page.dark .auth-card {
   background: #17191f;
+  color: #e7e8ec;
   border-color: rgba(255, 255, 255, 0.09);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
 }
