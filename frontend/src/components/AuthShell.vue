@@ -7,7 +7,7 @@
 // селектора после :global(), из-за чего opacity/фон применялись ко всему
 // <html> (белая «пелена» на всё приложение) — см. фикс v1.0.8.
 import { NIcon, NButton } from 'naive-ui'
-import { CubeOutline, SunnyOutline, MoonOutline } from '@vicons/ionicons5'
+import { SunnyOutline, MoonOutline } from '@vicons/ionicons5'
 import { useThemeStore } from '../stores/theme'
 
 defineProps<{
@@ -35,9 +35,7 @@ const theme = useThemeStore()
 
     <div class="auth-card">
       <div class="brand">
-        <div class="brand-logo">
-          <n-icon :component="CubeOutline" :size="30" />
-        </div>
+        <img class="brand-logo" src="/logo.png" alt="DSMS" />
         <div class="brand-name">DSMS</div>
         <div class="brand-sub">{{ subtitle ?? 'Docker Swarm Management System' }}</div>
       </div>
@@ -162,16 +160,12 @@ const theme = useThemeStore()
   margin-bottom: 28px;
 }
 .brand-logo {
-  width: 60px;
-  height: 60px;
+  display: block;
+  width: 76px;
+  height: 76px;
   margin: 0 auto 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 16px;
-  color: #fff;
-  background: linear-gradient(135deg, #3b5bdb, #7048e8);
-  box-shadow: 0 8px 20px rgba(59, 91, 219, 0.4);
+  border-radius: 18px;
+  box-shadow: 0 8px 22px rgba(31, 58, 130, 0.35);
 }
 .brand-name {
   font-size: 26px;

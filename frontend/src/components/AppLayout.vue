@@ -95,8 +95,11 @@ async function logout() {
   <n-layout has-sider class="app-root">
     <n-layout-sider bordered collapse-mode="width" :width="220" :collapsed-width="0" show-trigger="bar">
       <div class="logo">
-        <span class="logo-name">DSMS</span>
-        <span class="logo-full">Docker Swarm Management System</span>
+        <img class="logo-img" src="/logo.png" alt="DSMS" />
+        <div class="logo-text">
+          <span class="logo-name">DSMS</span>
+          <span class="logo-full">Docker Swarm Management System</span>
+        </div>
       </div>
       <n-menu :options="menu" :value="String(route.name)" />
     </n-layout-sider>
@@ -132,15 +135,28 @@ async function logout() {
   height: 100vh;
 }
 .logo {
-  padding: 16px 18px;
+  padding: 16px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex: 0 0 auto;
+}
+.logo-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 .logo-name {
   font-weight: 700;
   font-size: 20px;
   letter-spacing: 0.5px;
+  line-height: 1.1;
 }
 .logo-full {
   font-size: 14px;
