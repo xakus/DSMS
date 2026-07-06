@@ -21,15 +21,17 @@ const message = useMessage()
 const router = useRouter()
 const auth = useAuthStore()
 
-// --- General: смена пароля + порог disk-алерта ---
+// --- General: смена пароля + порог disk-алерта + ретенция истории ---
 const pwForm = ref({ old: '', new: '' })
 const diskPct = ref(90)
+const retentionDays = ref(7)
 
 /** Загрузить настройки панели. */
 async function loadSettings() {
   try {
-    const s = await api<{ alert_disk_pct: number }>('/settings')
+    const s = await api<{ alert_disk_pct: number; metrics_retention_days: number }>('/settings')
     diskPct.value = s.alert_disk_pct
+    retentionDays.value = s.metrics_retention_days
   } catch { /* настройки недоступны — оставляем дефолт */ }
 }
 
@@ -45,10 +47,13 @@ async function changePassword() {
   }
 }
 
-/** Сохранить порог disk-алерта (применяется сразу). */
+/** Сохранить пороги и ретенцию (применяются сразу, без рестарта). */
 async function saveThreshold() {
   try {
-    await api('/settings', { method: 'PUT', body: { alert_disk_pct: diskPct.value } })
+    await api('/settings', {
+      method: 'PUT',
+      body: { alert_disk_pct: diskPct.value, metrics_retention_days: retentionDays.value },
+    })
     message.success('OK')
   } catch (e) {
     message.error(e instanceof ApiError ? e.message : 'error')
@@ -146,13 +151,19 @@ const columns = computed<DataTableColumns<RegistryInfo>>(() => [
               </n-form>
             </n-card>
 
-            <!-- Пороги алертов (FR-12, применяется на лету) -->
-            <n-card :title="t('settings.alerts')" size="small">
-              <n-space align="center">
-                <span>{{ t('settings.diskThreshold') }}</span>
-                <n-input-number v-model:value="diskPct" :min="50" :max="99" />
-                <n-button size="small" @click="saveThreshold">{{ t('common.save') }}</n-button>
-              </n-space>
+            <!-- Мониторинг: пороги алертов + ретенция истории (применяется на лету) -->
+            <n-card :title="t('settings.monitoring')" size="small">
+              <n-form label-placement="top">
+                <n-form-item :label="t('settings.diskThreshold')">
+                  <n-input-number v-model:value="diskPct" :min="50" :max="99" class="num" />
+                </n-form-item>
+                <n-form-item :label="t('settings.retention')">
+                  <n-input-number v-model:value="retentionDays" :min="1" :max="90" class="num">
+                    <template #suffix>{{ t('settings.days') }}</template>
+                  </n-input-number>
+                </n-form-item>
+                <n-button type="primary" @click="saveThreshold">{{ t('common.save') }}</n-button>
+              </n-form>
             </n-card>
 
             <!-- Ротация agent-token: только через Docker CLI -->
@@ -209,11 +220,17 @@ docker service update --secret-rm agent_token --secret-add agent_token dsms_agen
 .reg-modal {
   max-width: 480px;
 }
+/* Формы настроек: разумная ширина, по центру — не липнут к левому краю */
 .general {
-  max-width: 640px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.num {
+  width: 200px;
 }
 .cli {
   font-size: 12px;
   overflow-x: auto;
+  white-space: pre-wrap;
 }
 </style>

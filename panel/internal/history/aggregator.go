@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/xakus/DSMS/panel/internal/metrics"
@@ -16,8 +17,11 @@ import (
 // Интервалы обслуживания.
 const (
 	aggregateEvery = time.Minute
-	retention      = 7 * 24 * time.Hour // ретенция metrics_1m (разд. 5 ТЗ)
 	vacuumEvery    = 24 * time.Hour
+
+	// SettingRetentionDays — ключ настройки ретенции (Settings, экран 12).
+	SettingRetentionDays = "metrics.retention_days"
+	defaultRetentionDays = 7 // ретенция metrics_1m по умолчанию (разд. 5 ТЗ)
 )
 
 // DiskAgg / NetAgg — агрегированные скорости за минуту (в *_json колонки).
@@ -43,6 +47,16 @@ func New(st *store.Store, buf *metrics.ClusterBuffer) *Aggregator {
 	return &Aggregator{store: st, buffer: buf}
 }
 
+// retentionDays возвращает срок хранения истории из настроек (1..90, дефолт 7).
+func (a *Aggregator) retentionDays() int {
+	if v, _ := a.store.GetSetting(SettingRetentionDays); v != "" {
+		if d, err := strconv.Atoi(v); err == nil && d >= 1 && d <= 90 {
+			return d
+		}
+	}
+	return defaultRetentionDays
+}
+
 // Run — цикл агрегации/ретенции/VACUUM; блокирует до отмены ctx.
 func (a *Aggregator) Run(ctx context.Context) {
 	agg := time.NewTicker(aggregateEvery)
@@ -55,7 +69,9 @@ func (a *Aggregator) Run(ctx context.Context) {
 			return
 		case <-agg.C:
 			a.aggregate()
-			if err := a.store.CleanupMetrics(time.Now().Add(-retention).Unix()); err != nil {
+			// Ретенция настраивается из UI (Settings) без рестарта.
+			cutoff := time.Now().AddDate(0, 0, -a.retentionDays()).Unix()
+			if err := a.store.CleanupMetrics(cutoff); err != nil {
 				slog.Warn("metrics cleanup failed", "err", err)
 			}
 		case <-vac.C:

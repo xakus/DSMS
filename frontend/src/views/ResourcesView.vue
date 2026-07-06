@@ -5,7 +5,7 @@ import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NCard, NTabs, NTabPane, NDataTable, NButton, NSpace, NModal, NInput,
-  NForm, NFormItem, NSwitch, NTag, NIcon, useMessage, useDialog,
+  NForm, NFormItem, NSwitch, NTag, NIcon, NAlert, useMessage, useDialog,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { EyeOutline, TrashOutline, AddOutline } from '@vicons/ionicons5'
@@ -186,6 +186,10 @@ const volumeColumns = computed<DataTableColumns<VolumeRow>>(() => [
       <n-tabs type="line">
         <n-tab-pane name="secrets" :tab="t('resources.secrets')">
           <n-space vertical>
+            <!-- Пояснение: секреты неизвлекаемы by design (FR-09 3.9.2) -->
+            <n-alert type="info" :show-icon="true" :bordered="false">
+              {{ t('resources.secretsNote') }}
+            </n-alert>
             <n-space justify="end">
               <n-button size="small" type="primary" @click="openCreate('secret')">
                 <template #icon><n-icon :component="AddOutline" /></template>

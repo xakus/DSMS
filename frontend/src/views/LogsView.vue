@@ -5,7 +5,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NCard, NSpace, NSelect, NSwitch, NInput, NButton, NTag } from 'naive-ui'
+import { NCard, NSelect, NSwitch, NInput, NButton, NTag, NIcon } from 'naive-ui'
+import { DownloadOutline } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
 import { api } from '../api/client'
 import { wsClient } from '../api/ws'
@@ -92,15 +93,21 @@ watch([serviceId, tail], subscribe)
 <template>
   <AppLayout>
     <n-card size="small" class="logs-card">
-      <n-space align="center" class="toolbar">
-        <n-select v-model:value="serviceId" :options="serviceOptions" :placeholder="t('logs.selectService')" class="svc-select" filterable />
+      <div class="toolbar">
+        <n-select
+          v-model:value="serviceId" :options="serviceOptions"
+          :placeholder="t('logs.selectService')" class="svc-select" filterable
+        />
         <n-select v-model:value="tail" :options="tailOptions" class="tail-select" />
         <n-switch v-model:value="showTs"><template #checked>ts</template><template #unchecked>ts</template></n-switch>
         <n-switch v-model:value="follow"><template #checked>follow</template><template #unchecked>follow</template></n-switch>
         <n-input v-model:value="filter" :placeholder="t('logs.filter')" clearable class="filter" />
-        <n-button size="small" @click="download">⬇ .txt</n-button>
+        <n-button size="small" :disabled="!visible.length" @click="download">
+          <template #icon><n-icon :component="DownloadOutline" /></template>
+          .txt
+        </n-button>
         <n-tag size="small" :bordered="false">{{ visible.length }}</n-tag>
-      </n-space>
+      </div>
 
       <!-- Терминальный вид: моношрифт, тёмный фон (разд. 6.2 экран 7) -->
       <div ref="termEl" class="term">
@@ -118,16 +125,24 @@ watch([serviceId, tail], subscribe)
 <style scoped>
 /* Терминало-подобный вид (3.5, разд. 6.2): чёрный фон, моношрифт */
 .toolbar {
-  margin-bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
 }
+/* Селектор сервиса растягивается — длинные имена видны целиком */
 .svc-select {
-  min-width: 220px;
+  flex: 1 1 340px;
+  min-width: 260px;
 }
 .tail-select {
+  flex: 0 0 auto;
   width: 90px;
 }
 .filter {
-  width: 200px;
+  flex: 1 1 180px;
+  min-width: 140px;
 }
 .term {
   background: #0c0c0c;

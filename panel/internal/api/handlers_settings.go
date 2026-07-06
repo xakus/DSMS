@@ -11,8 +11,12 @@ import (
 	"github.com/xakus/DSMS/panel/internal/auth"
 )
 
-// settingAlertDiskPct — ключ порога диска в таблице settings (FR-12).
-const settingAlertDiskPct = "alert.disk_pct"
+// Ключи настроек в таблице settings.
+const (
+	settingAlertDiskPct  = "alert.disk_pct"         // порог диска (FR-12)
+	settingRetentionDays = "metrics.retention_days" // ретенция истории метрик (разд. 5)
+	defaultRetentionDays = 7
+)
 
 // changePassword — POST /settings/password {old, new} (6.2 экран 12).
 // Смена инвалидирует ВСЕ сессии пользователя, кроме текущей? В v1 — все:
@@ -57,17 +61,32 @@ func (h *handlers) getSettings(w http.ResponseWriter, r *http.Request) {
 			diskPct = f
 		}
 	}
-	writeJSON(w, map[string]any{"alert_disk_pct": diskPct})
+	retention := defaultRetentionDays
+	if v, _ := h.Store.GetSetting(settingRetentionDays); v != "" {
+		if d, err := strconv.Atoi(v); err == nil {
+			retention = d
+		}
+	}
+	writeJSON(w, map[string]any{
+		"alert_disk_pct":         diskPct,
+		"metrics_retention_days": retention,
+	})
 }
 
-// putSettings — PUT /settings {alert_disk_pct}: пороги алертов (3.12.1).
+// putSettings — PUT /settings {alert_disk_pct, metrics_retention_days}:
+// пороги алертов (3.12.1) + ретенция истории метрик (разд. 5).
 func (h *handlers) putSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		AlertDiskPct float64 `json:"alert_disk_pct"`
+		AlertDiskPct  float64 `json:"alert_disk_pct"`
+		RetentionDays int     `json:"metrics_retention_days"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil ||
 		req.AlertDiskPct < 50 || req.AlertDiskPct > 99 {
 		writeErr(w, http.StatusBadRequest, "alert_disk_pct must be 50..99")
+		return
+	}
+	if req.RetentionDays < 1 || req.RetentionDays > 90 {
+		writeErr(w, http.StatusBadRequest, "metrics_retention_days must be 1..90")
 		return
 	}
 	if err := h.Store.SetSetting(settingAlertDiskPct,
@@ -75,10 +94,14 @@ func (h *handlers) putSettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "storage error")
 		return
 	}
+	if err := h.Store.SetSetting(settingRetentionDays, strconv.Itoa(req.RetentionDays)); err != nil {
+		writeErr(w, http.StatusInternalServerError, "storage error")
+		return
+	}
 	if h.Alerts != nil {
 		h.Alerts.SetDiskPct(req.AlertDiskPct) // применяется сразу, без рестарта
 	}
 	s := sessionFrom(r)
-	_ = h.Store.AppendAudit(s.UserID, "settings.update", "settings", settingAlertDiskPct, "")
+	_ = h.Store.AppendAudit(s.UserID, "settings.update", "settings", "", "")
 	writeJSON(w, map[string]string{"status": "ok"})
 }

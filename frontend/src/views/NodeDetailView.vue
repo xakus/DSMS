@@ -3,16 +3,18 @@
 // живые графики CPU/RAM/Disk I/O/Net (15 мин), таблицы дисков/сети/задач,
 // labels-редактор, promote/demote, availability, remove.
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   NCard, NSpace, NButton, NTag, NDataTable, NProgress, NGrid, NGi,
   NDynamicInput, NModal, NRadioGroup, NRadioButton, useMessage, useDialog,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
+import { DocumentTextOutline, RefreshOutline } from '@vicons/ionicons5'
 import type uPlot from 'uplot'
 import AppLayout from '../components/AppLayout.vue'
 import UPlotChart from '../components/UPlotChart.vue'
+import { rowActions } from '../utils/actions'
 import { api, ApiError } from '../api/client'
 import { useMetricsStore } from '../stores/metrics'
 import { fmtBps, fmtBytes, fmtPct, fmtUptime } from '../utils/format'
@@ -185,7 +187,15 @@ const containerColumns = computed<DataTableColumns<Record<string, unknown>>>(() 
 
 /** Задачи на ноде (3.2.4) со ссылками на сервисы (появятся в этапе 3). */
 const taskColumns = computed<DataTableColumns<NodeTask>>(() => [
-  { title: t('nodes.service'), key: 'service' },
+  {
+    // Клик по сервису ведёт на его страницу — оттуда логи, редеплой, действия.
+    title: t('nodes.service'), key: 'service',
+    render: (row) =>
+      row.service_id
+        ? h(RouterLink, { to: { name: 'service', params: { id: row.service_id } }, class: 'svc-link' },
+            { default: () => row.service || row.service_id })
+        : (row.service || '—'),
+  },
   { title: 'Slot', key: 'slot', width: 70 },
   {
     title: t('nodes.state'), key: 'state',
@@ -194,7 +204,34 @@ const taskColumns = computed<DataTableColumns<NodeTask>>(() => [
         { default: () => row.state }),
   },
   { title: t('nodes.message'), key: 'message', ellipsis: true },
+  {
+    title: t('services.actions'), key: 'a', width: 110,
+    render: (row) =>
+      row.service_id
+        ? rowActions([
+            { icon: DocumentTextOutline, tip: t('nav.logs'), onClick: () => router.push({ name: 'logs', query: { service: row.service_id } }) },
+            { icon: RefreshOutline, tip: t('services.redeployTip'), onClick: () => redeployService(row.service_id) },
+          ])
+        : null,
+  },
 ])
+
+/** Быстрый редеплой сервиса прямо со страницы ноды (3.4.3). */
+function redeployService(serviceId: string) {
+  dialog.info({
+    title: t('services.redeployConfirm', { name: serviceId }),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      try {
+        await api(`/services/${serviceId}/redeploy`, { method: 'POST' })
+        message.success('OK')
+      } catch (e) {
+        message.error(e instanceof ApiError ? e.message : 'error')
+      }
+    },
+  })
+}
 
 // --- управление нодой (FR-03) ---
 
@@ -372,5 +409,13 @@ async function saveLabels() {
 }
 .labels-modal {
   max-width: 560px;
+}
+/* Ссылка на сервис в таблице задач — акцентный цвет */
+:deep(.svc-link) {
+  color: var(--n-primary-color, #2563eb);
+  text-decoration: none;
+}
+:deep(.svc-link:hover) {
+  text-decoration: underline;
 }
 </style>

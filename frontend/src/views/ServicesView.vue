@@ -2,7 +2,7 @@
 // Таблица сервисов (FR-04 3.4.1–3.4.3): группировка по стекам,
 // цветовая индикация реплик, быстрые действия в строке.
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   NCard, NDataTable, NTag, NInput, NInputNumber,
@@ -11,7 +11,7 @@ import {
 import type { DataTableColumns } from 'naive-ui'
 import {
   PlayOutline, PauseOutline, RefreshOutline, ResizeOutline,
-  PricetagOutline, ArrowUndoOutline, TrashOutline,
+  PricetagOutline, ArrowUndoOutline, TrashOutline, DocumentTextOutline,
 } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
 import { rowActions } from '../utils/actions'
@@ -19,8 +19,14 @@ import { api, ApiError } from '../api/client'
 import type { ServiceInfo } from '../types'
 
 const { t } = useI18n()
+const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
+
+/** Перейти на экран логов этого сервиса. */
+function goLogs(svc: ServiceInfo) {
+  router.push({ name: 'logs', query: { service: svc.id } })
+}
 
 const services = ref<ServiceInfo[]>([])
 const loading = ref(false)
@@ -154,7 +160,7 @@ const columns = computed<DataTableColumns<ServiceInfo>>(() => [
   },
   { title: t('services.ports'), key: 'ports', render: (row) => (row.ports ?? []).join(', ') || '—' },
   {
-    title: t('services.actions'), key: 'actions', width: 240,
+    title: t('services.actions'), key: 'actions', width: 280,
     render: (row) =>
       rowActions([
         row.stopped
@@ -163,6 +169,7 @@ const columns = computed<DataTableColumns<ServiceInfo>>(() => [
         { icon: RefreshOutline, tip: t('services.redeployTip'), onClick: () => redeploy(row) },
         { icon: ResizeOutline, tip: t('services.scaleTip'), disabled: row.mode === 'global', onClick: () => openScale(row) },
         { icon: PricetagOutline, tip: t('services.imageTip'), onClick: () => openImage(row) },
+        { icon: DocumentTextOutline, tip: t('nav.logs'), onClick: () => goLogs(row) },
         { icon: ArrowUndoOutline, tip: t('services.rollbackTip'), onClick: () => rollback(row) },
         { icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => openRemove(row) },
       ]),
