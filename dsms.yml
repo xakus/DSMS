@@ -43,11 +43,14 @@ services:
     environment:
       # ID ноды подставляет Swarm — по нему panel привязывает метрики
       - NODE_ID={{.Node.ID}}
-      # ВАЖНО: полное имя сервиса в Swarm = <имя_стека>_panel. При деплое
-      # командой `docker stack deploy -c dsms.yml dsms` это dsms_panel.
-      # Короткое имя `panel` в Swarm резолвится нестабильно (no such host) —
-      # используем полное. Если деплоишь стек под другим именем — поправь префикс.
-      - PANEL_URL=http://dsms_panel:9000
+      # ВАЖНО: используем tasks.<стек>_panel, а НЕ короткое `panel` и НЕ VIP.
+      # Причина: панель определяет IP агента по source-адресу ingest-запроса,
+      # чтобы потом ходить к нему на :9001 (df/volumes/prune, FR-10/FR-11).
+      # При обращении к сервису по VIP Swarm делает source-NAT → панель видит
+      # endpoint-адрес сети, а не реальный IP агента, и :9001 даёт refused.
+      # `tasks.<сервис>` резолвится в прямой task-IP панели (без балансировщика),
+      # поэтому source-IP агента сохраняется. Префикс = имя стека (здесь dsms).
+      - PANEL_URL=http://tasks.dsms_panel:9000
       - HOST_PROC=/host/proc
       - HOST_SYS=/host/sys
     secrets: [agent_token]
