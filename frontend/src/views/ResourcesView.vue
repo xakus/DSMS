@@ -5,10 +5,12 @@ import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NCard, NTabs, NTabPane, NDataTable, NButton, NSpace, NModal, NInput,
-  NForm, NFormItem, NSwitch, NTag, useMessage, useDialog,
+  NForm, NFormItem, NSwitch, NTag, NIcon, useMessage, useDialog,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
+import { EyeOutline, TrashOutline, AddOutline } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
+import { rowActions } from '../utils/actions'
 import { api, ApiError } from '../api/client'
 import { fmtBytes } from '../utils/format'
 
@@ -130,7 +132,10 @@ const secretColumns = computed<DataTableColumns<SecretRow>>(() => [
   { title: t('services.name'), key: 'name' },
   { title: t('resources.usedBy'), key: 'used_by', render: usedByCol },
   { title: t('services.created'), key: 'created', width: 180, render: (r) => new Date(r.created).toLocaleString() },
-  { title: '', key: 'a', width: 60, render: (r) => h(NButton, { size: 'tiny', type: 'error', onClick: () => removeSecret(r) }, { default: () => '🗑' }) },
+  {
+    title: t('services.actions'), key: 'a', width: 80,
+    render: (r) => rowActions([{ icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => removeSecret(r) }]),
+  },
 ])
 
 const configColumns = computed<DataTableColumns<SecretRow>>(() => [
@@ -138,13 +143,11 @@ const configColumns = computed<DataTableColumns<SecretRow>>(() => [
   { title: t('resources.size'), key: 'size', width: 90, render: (r) => fmtBytes(r.size ?? 0) },
   { title: t('resources.usedBy'), key: 'used_by', render: usedByCol },
   {
-    title: '', key: 'a', width: 100,
-    render: (r) => h(NSpace, { size: 4 }, {
-      default: () => [
-        h(NButton, { size: 'tiny', onClick: () => viewConfig(r) }, { default: () => '👁' }),
-        h(NButton, { size: 'tiny', type: 'error', onClick: () => removeConfig(r) }, { default: () => '🗑' }),
-      ],
-    }),
+    title: t('services.actions'), key: 'a', width: 110,
+    render: (r) => rowActions([
+      { icon: EyeOutline, tip: t('resources.view'), onClick: () => viewConfig(r) },
+      { icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => removeConfig(r) },
+    ]),
   },
 ])
 
@@ -154,7 +157,10 @@ const networkColumns = computed<DataTableColumns<NetworkRow>>(() => [
   { title: 'Scope', key: 'scope', width: 90 },
   { title: 'Subnet', key: 'subnet', width: 150, render: (r) => r.subnet || '—' },
   { title: 'Attachable', key: 'attachable', width: 100, render: (r) => (r.attachable ? '✓' : '—') },
-  { title: '', key: 'a', width: 60, render: (r) => h(NButton, { size: 'tiny', type: 'error', onClick: () => removeNetwork(r) }, { default: () => '🗑' }) },
+  {
+    title: t('services.actions'), key: 'a', width: 80,
+    render: (r) => rowActions([{ icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => removeNetwork(r) }]),
+  },
 ])
 
 const volumeColumns = computed<DataTableColumns<VolumeRow>>(() => [
@@ -167,7 +173,10 @@ const volumeColumns = computed<DataTableColumns<VolumeRow>>(() => [
     render: (r) => h(NTag, { size: 'small', bordered: false, type: r.in_use ? 'success' : 'default' },
       { default: () => (r.in_use ? t('resources.used') : t('resources.unused')) }),
   },
-  { title: '', key: 'a', width: 60, render: (r) => h(NButton, { size: 'tiny', type: 'error', onClick: () => removeVolume(r) }, { default: () => '🗑' }) },
+  {
+    title: t('services.actions'), key: 'a', width: 80,
+    render: (r) => rowActions([{ icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => removeVolume(r) }]),
+  },
 ])
 </script>
 
@@ -175,31 +184,40 @@ const volumeColumns = computed<DataTableColumns<VolumeRow>>(() => [
   <AppLayout>
     <n-card size="small">
       <n-tabs type="line">
-        <n-tab-pane name="secrets" tab="Secrets">
+        <n-tab-pane name="secrets" :tab="t('resources.secrets')">
           <n-space vertical>
             <n-space justify="end">
-              <n-button size="small" type="primary" @click="openCreate('secret')">+ Secret</n-button>
+              <n-button size="small" type="primary" @click="openCreate('secret')">
+                <template #icon><n-icon :component="AddOutline" /></template>
+                {{ t('resources.addSecret') }}
+              </n-button>
             </n-space>
             <n-data-table :columns="secretColumns" :data="secrets" size="small" :bordered="false" />
           </n-space>
         </n-tab-pane>
-        <n-tab-pane name="configs" tab="Configs">
+        <n-tab-pane name="configs" :tab="t('resources.configs')">
           <n-space vertical>
             <n-space justify="end">
-              <n-button size="small" type="primary" @click="openCreate('config')">+ Config</n-button>
+              <n-button size="small" type="primary" @click="openCreate('config')">
+                <template #icon><n-icon :component="AddOutline" /></template>
+                {{ t('resources.addConfig') }}
+              </n-button>
             </n-space>
             <n-data-table :columns="configColumns" :data="configs" size="small" :bordered="false" />
           </n-space>
         </n-tab-pane>
-        <n-tab-pane name="networks" tab="Networks">
+        <n-tab-pane name="networks" :tab="t('resources.networks')">
           <n-space vertical>
             <n-space justify="end">
-              <n-button size="small" type="primary" @click="showNetForm = true">+ Network</n-button>
+              <n-button size="small" type="primary" @click="showNetForm = true">
+                <template #icon><n-icon :component="AddOutline" /></template>
+                {{ t('resources.addNetwork') }}
+              </n-button>
             </n-space>
             <n-data-table :columns="networkColumns" :data="networks" size="small" :bordered="false" />
           </n-space>
         </n-tab-pane>
-        <n-tab-pane name="volumes" tab="Volumes">
+        <n-tab-pane name="volumes" :tab="t('resources.volumes')">
           <n-data-table :columns="volumeColumns" :data="volumes" size="small" :bordered="false" />
         </n-tab-pane>
       </n-tabs>

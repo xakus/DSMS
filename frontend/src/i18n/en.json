@@ -31,6 +31,14 @@
     "filterRule": "Filter by rule"
   },
   "resources": {
+    "secrets": "Secrets",
+    "configs": "Configs",
+    "networks": "Networks",
+    "volumes": "Volumes",
+    "addSecret": "Secret",
+    "addConfig": "Config",
+    "addNetwork": "Network",
+    "view": "View content",
     "usedBy": "Used by",
     "size": "Size",
     "inUse": "In use",
@@ -42,6 +50,7 @@
     "removeUsedConfirm": "«{name}» is IN USE! Force-remove it?"
   },
   "disk": {
+    "prune": "Prune",
     "reclaimable": "reclaimable",
     "allImages": "prune all unused images (not only dangling)",
     "pruneConfirm": "Prune {target} on {node}?",
@@ -73,6 +82,15 @@
     "tasks": "Tasks",
     "spec": "Specification",
     "created": "Created",
+    "actions": "Actions",
+    "scale": "Scale",
+    "updateImage": "Update image",
+    "startTip": "Start (restore replicas)",
+    "stopTip": "Stop (scale to 0)",
+    "redeployTip": "Force redeploy",
+    "scaleTip": "Scale",
+    "imageTip": "Update image",
+    "rollbackTip": "Rollback",
     "stopConfirm": "Stop service {name}? (scale to 0, replicas will be remembered)",
     "redeployConfirm": "Force redeploy {name}?",
     "rollbackConfirm": "Rollback {name} to previous spec?",
@@ -82,6 +100,7 @@
   "stacks": {
     "name": "Stack",
     "services": "Services",
+    "redeployTip": "Redeploy stack",
     "redeployConfirm": "Force redeploy all services of stack {name}?",
     "removeTitle": "Remove stack",
     "removeHint": "This removes all {count} services of the stack. Type «{name}» to confirm."
@@ -110,6 +129,7 @@
     "copy": "Copy",
     "copied": "Copied",
     "remove": "Remove",
+    "edit": "Edit",
     "loadFailed": "Failed to load data"
   },
   "dashboard": {
@@ -140,6 +160,8 @@
     "iface": "Interface",
     "service": "Service",
     "state": "State",
-    "message": "Message"
+    "message": "Message",
+    "labelKey": "key",
+    "labelValue": "value"
   }
 }

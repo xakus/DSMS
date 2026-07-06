@@ -5,8 +5,9 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NCard, NStatistic, NSpace, NButton, NGrid, NGi, NModal,
-  NInput, NTabs, NTabPane, useMessage, useDialog,
+  NInput, NTabs, NTabPane, NIcon, useMessage, useDialog,
 } from 'naive-ui'
+import { CopyOutline, RefreshOutline } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
 import NodeCard from '../components/NodeCard.vue'
 import { api } from '../api/client'
@@ -108,14 +109,18 @@ function rotate() {
           <n-space vertical>
             <n-input :value="joinCmd(role)" type="textarea" readonly :autosize="{ minRows: 2 }" />
             <n-space>
-              <n-button size="small" @click="copy(joinCmd(role))">📋 {{ t('common.copy') }}</n-button>
+              <n-button size="small" @click="copy(joinCmd(role))">
+                <template #icon><n-icon :component="CopyOutline" /></template>
+                {{ t('common.copy') }}
+              </n-button>
             </n-space>
           </n-space>
         </n-tab-pane>
       </n-tabs>
       <template #footer>
         <n-button quaternary type="warning" size="small" @click="rotate">
-          🔄 {{ t('nodes.rotateTokens') }}
+          <template #icon><n-icon :component="RefreshOutline" /></template>
+          {{ t('nodes.rotateTokens') }}
         </n-button>
       </template>
     </n-modal>

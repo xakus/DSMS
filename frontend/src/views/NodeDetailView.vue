@@ -348,7 +348,7 @@ async function saveLabels() {
       <n-modal v-model:show="showLabels" preset="card" title="Labels" class="labels-modal">
         <n-dynamic-input
           v-model:value="labelPairs" preset="pair"
-          key-placeholder="key" value-placeholder="value"
+          :key-placeholder="t('nodes.labelKey')" :value-placeholder="t('nodes.labelValue')"
         />
         <template #footer>
           <n-space justify="end">

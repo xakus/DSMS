@@ -5,11 +5,16 @@ import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
-  NCard, NDataTable, NTag, NButton, NSpace, NInput, NInputNumber,
+  NCard, NDataTable, NTag, NInput, NInputNumber,
   NModal, useMessage, useDialog,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
+import {
+  PlayOutline, PauseOutline, RefreshOutline, ResizeOutline,
+  PricetagOutline, ArrowUndoOutline, TrashOutline,
+} from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
+import { rowActions } from '../utils/actions'
 import { api, ApiError } from '../api/client'
 import type { ServiceInfo } from '../types'
 
@@ -149,20 +154,18 @@ const columns = computed<DataTableColumns<ServiceInfo>>(() => [
   },
   { title: t('services.ports'), key: 'ports', render: (row) => (row.ports ?? []).join(', ') || '—' },
   {
-    title: '', key: 'actions', width: 320,
+    title: t('services.actions'), key: 'actions', width: 240,
     render: (row) =>
-      h(NSpace, { size: 4 }, {
-        default: () => [
-          row.stopped
-            ? h(NButton, { size: 'tiny', type: 'success', onClick: () => start(row) }, { default: () => '▶' })
-            : h(NButton, { size: 'tiny', type: 'warning', onClick: () => stop(row), disabled: row.mode === 'global' }, { default: () => '⏸' }),
-          h(NButton, { size: 'tiny', onClick: () => redeploy(row) }, { default: () => '🔄' }),
-          h(NButton, { size: 'tiny', onClick: () => openScale(row), disabled: row.mode === 'global' }, { default: () => '⚖' }),
-          h(NButton, { size: 'tiny', onClick: () => openImage(row) }, { default: () => '🏷' }),
-          h(NButton, { size: 'tiny', onClick: () => rollback(row) }, { default: () => '↩' }),
-          h(NButton, { size: 'tiny', type: 'error', onClick: () => openRemove(row) }, { default: () => '🗑' }),
-        ],
-      }),
+      rowActions([
+        row.stopped
+          ? { icon: PlayOutline, tip: t('services.startTip'), type: 'success', onClick: () => start(row) }
+          : { icon: PauseOutline, tip: t('services.stopTip'), type: 'warning', disabled: row.mode === 'global', onClick: () => stop(row) },
+        { icon: RefreshOutline, tip: t('services.redeployTip'), onClick: () => redeploy(row) },
+        { icon: ResizeOutline, tip: t('services.scaleTip'), disabled: row.mode === 'global', onClick: () => openScale(row) },
+        { icon: PricetagOutline, tip: t('services.imageTip'), onClick: () => openImage(row) },
+        { icon: ArrowUndoOutline, tip: t('services.rollbackTip'), onClick: () => rollback(row) },
+        { icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => openRemove(row) },
+      ]),
   },
 ])
 </script>
@@ -177,14 +180,14 @@ const columns = computed<DataTableColumns<ServiceInfo>>(() => [
     </n-card>
 
     <!-- Scale -->
-    <n-modal :show="!!scaleTarget" preset="dialog" :title="`Scale: ${scaleTarget?.name}`"
+    <n-modal :show="!!scaleTarget" preset="dialog" :title="`${t('services.scale')}: ${scaleTarget?.name}`"
              :positive-text="t('common.confirm')" :negative-text="t('common.cancel')"
              @positive-click="applyScale" @negative-click="scaleTarget = null" @close="scaleTarget = null">
       <n-input-number v-model:value="scaleValue" :min="0" class="w100" />
     </n-modal>
 
     <!-- Update image -->
-    <n-modal :show="!!imageTarget" preset="dialog" :title="`Image: ${imageTarget?.name}`"
+    <n-modal :show="!!imageTarget" preset="dialog" :title="`${t('services.updateImage')}: ${imageTarget?.name}`"
              :positive-text="t('common.confirm')" :negative-text="t('common.cancel')"
              @positive-click="applyImage" @negative-click="imageTarget = null" @close="imageTarget = null">
       <n-input v-model:value="imageValue" placeholder="repo/image:tag" />

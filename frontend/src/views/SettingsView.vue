@@ -1,14 +1,16 @@
 <script setup lang="ts">
 // Settings (разд. 6.2 экран 12): General (пароль, пороги алертов,
 // инструкция ротации agent-token) + Registries (FR-13).
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   NCard, NTabs, NTabPane, NDataTable, NButton, NSpace, NModal,
-  NForm, NFormItem, NInput, NInputNumber, NAlert, useMessage,
+  NForm, NFormItem, NInput, NInputNumber, NAlert, NIcon, useMessage,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
+import { CreateOutline, TrashOutline, AddOutline } from '@vicons/ionicons5'
+import { rowActions } from '../utils/actions'
 import AppLayout from '../components/AppLayout.vue'
 import { api, ApiError } from '../api/client'
 import { useAuthStore } from '../stores/auth'
@@ -115,14 +117,12 @@ const columns = computed<DataTableColumns<RegistryInfo>>(() => [
   { title: t('settings.regUser'), key: 'username' },
   { title: t('settings.regLabel'), key: 'label' },
   {
-    title: '', key: 'actions', width: 120,
+    title: t('services.actions'), key: 'actions', width: 110,
     render: (row) =>
-      h(NSpace, { size: 4 }, {
-        default: () => [
-          h(NButton, { size: 'tiny', onClick: () => openEdit(row) }, { default: () => '✏️' }),
-          h(NButton, { size: 'tiny', type: 'error', onClick: () => remove(row) }, { default: () => '🗑' }),
-        ],
-      }),
+      rowActions([
+        { icon: CreateOutline, tip: t('common.edit'), onClick: () => openEdit(row) },
+        { icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => remove(row) },
+      ]),
   },
 ])
 </script>
@@ -167,7 +167,10 @@ docker service update --secret-rm agent_token --secret-add agent_token dsms_agen
         <n-tab-pane name="registries" :tab="t('settings.registries')">
           <n-space vertical>
             <n-space justify="end">
-              <n-button size="small" type="primary" @click="openCreate">+ {{ t('settings.addRegistry') }}</n-button>
+              <n-button size="small" type="primary" @click="openCreate">
+                <template #icon><n-icon :component="AddOutline" /></template>
+                {{ t('settings.addRegistry') }}
+              </n-button>
             </n-space>
             <n-data-table :columns="columns" :data="registries" size="small" :bordered="false" />
           </n-space>

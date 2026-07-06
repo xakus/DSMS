@@ -3,9 +3,11 @@
 // redeploy/remove стека целиком (двойное подтверждение имени).
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NCard, NDataTable, NTag, NButton, NSpace, NModal, NInput, useMessage, useDialog } from 'naive-ui'
+import { NCard, NDataTable, NTag, NModal, NInput, useMessage, useDialog } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
+import { RefreshOutline, TrashOutline } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
+import { rowActions } from '../utils/actions'
 import { api, ApiError } from '../api/client'
 import type { StackInfo } from '../types'
 
@@ -90,14 +92,12 @@ const columns = computed<DataTableColumns<StackInfo>>(() => [
       { default: () => `${row.running}/${row.desired}` }),
   },
   {
-    title: '', key: 'actions', width: 140,
+    title: t('services.actions'), key: 'actions', width: 120,
     render: (row) => row.name === '(no stack)' ? null :
-      h(NSpace, { size: 4 }, {
-        default: () => [
-          h(NButton, { size: 'tiny', onClick: () => redeploy(row) }, { default: () => '🔄' }),
-          h(NButton, { size: 'tiny', type: 'error', onClick: () => openRemove(row) }, { default: () => '🗑' }),
-        ],
-      }),
+      rowActions([
+        { icon: RefreshOutline, tip: t('stacks.redeployTip'), onClick: () => redeploy(row) },
+        { icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => openRemove(row) },
+      ]),
   },
 ])
 </script>

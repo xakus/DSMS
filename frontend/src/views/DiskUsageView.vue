@@ -4,8 +4,9 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  NCard, NGrid, NGi, NButton, NSpace, NCheckbox, NTag, useMessage, useDialog,
+  NCard, NGrid, NGi, NButton, NSpace, NCheckbox, NTag, NIcon, useMessage, useDialog,
 } from 'naive-ui'
+import { SparklesOutline } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
 import { api, ApiError } from '../api/client'
 import { fmtBytes } from '../utils/format'
@@ -94,9 +95,10 @@ function prune(node: NodeDF, target: string, reclaimable: number) {
               <span class="df-label">{{ s.label }} ({{ n.df[s.key].count }})</span>
               <span class="df-size">{{ fmtBytes(n.df[s.key].size) }}</span>
               <span class="df-rec">{{ t('disk.reclaimable') }}: {{ fmtBytes(n.df[s.key].reclaimable) }}</span>
-              <n-button size="tiny" type="warning" :disabled="n.df[s.key].reclaimable === 0"
+              <n-button size="small" type="warning" secondary :disabled="n.df[s.key].reclaimable === 0"
                         @click="prune(n, s.target, n.df[s.key].reclaimable)">
-                🧹 Prune
+                <template #icon><n-icon :component="SparklesOutline" /></template>
+                {{ t('disk.prune') }}
               </n-button>
             </div>
           </template>

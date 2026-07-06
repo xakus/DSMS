@@ -31,6 +31,14 @@
     "filterRule": "Фильтр по правилу"
   },
   "resources": {
+    "secrets": "Секреты",
+    "configs": "Конфиги",
+    "networks": "Сети",
+    "volumes": "Тома",
+    "addSecret": "Секрет",
+    "addConfig": "Конфиг",
+    "addNetwork": "Сеть",
+    "view": "Просмотр содержимого",
     "usedBy": "Используется",
     "size": "Размер",
     "inUse": "Статус",
@@ -42,6 +50,7 @@
     "removeUsedConfirm": "«{name}» ИСПОЛЬЗУЕТСЯ! Принудительно удалить?"
   },
   "disk": {
+    "prune": "Очистить",
     "reclaimable": "можно освободить",
     "allImages": "чистить все неиспользуемые образы (не только dangling)",
     "pruneConfirm": "Очистить {target} на {node}?",
@@ -73,6 +82,15 @@
     "tasks": "Задачи",
     "spec": "Спецификация",
     "created": "Создана",
+    "actions": "Действия",
+    "scale": "Масштаб",
+    "updateImage": "Обновить образ",
+    "startTip": "Запустить (вернуть реплики)",
+    "stopTip": "Остановить (scale 0)",
+    "redeployTip": "Передеплой",
+    "scaleTip": "Масштабировать",
+    "imageTip": "Обновить образ",
+    "rollbackTip": "Откат",
     "stopConfirm": "Остановить сервис {name}? (scale 0, реплики будут запомнены)",
     "redeployConfirm": "Принудительно передеплоить {name}?",
     "rollbackConfirm": "Откатить {name} на предыдущую спецификацию?",
@@ -82,6 +100,7 @@
   "stacks": {
     "name": "Стек",
     "services": "Сервисы",
+    "redeployTip": "Передеплой стека",
     "redeployConfirm": "Принудительно передеплоить все сервисы стека {name}?",
     "removeTitle": "Удаление стека",
     "removeHint": "Будут удалены все сервисы стека ({count} шт.). Введите «{name}» для подтверждения."
@@ -110,6 +129,7 @@
     "copy": "Копировать",
     "copied": "Скопировано",
     "remove": "Удалить",
+    "edit": "Изменить",
     "loadFailed": "Не удалось загрузить данные"
   },
   "dashboard": {
@@ -140,6 +160,8 @@
     "iface": "Интерфейс",
     "service": "Сервис",
     "state": "Состояние",
-    "message": "Сообщение"
+    "message": "Сообщение",
+    "labelKey": "ключ",
+    "labelValue": "значение"
   }
 }

@@ -26,22 +26,35 @@ let resizeObs: ResizeObserver | null = null
 function build() {
   if (!el.value) return
   chart?.destroy()
+  // Единый шрифт подписей осей — читаемый, совпадает с UI.
+  const axisFont = '12px system-ui, sans-serif'
+  const stroke = 'rgba(140,140,150,0.9)'
+  const grid = { stroke: 'rgba(140,140,150,0.15)', width: 1 }
+  const ticks = { stroke: 'rgba(140,140,150,0.25)', width: 1 }
   const opts: uPlot.Options = {
     width: el.value.clientWidth || 600,
     height: props.height ?? 220,
+    // Внутренние отступы, чтобы крайние подписи осей не срезались.
+    padding: [10, 12, 4, 4],
     // Тёмная/светлая тема наследуются через CSS-переменные Naive UI.
     series: [{}, ...props.series],
     axes: [
       {
-        stroke: 'rgba(128,128,128,0.9)',
-        grid: { stroke: 'rgba(128,128,128,0.15)' },
+        stroke,
+        grid,
+        ticks,
+        font: axisFont,
+        size: 32, // высота зоны оси X — метки времени не обрезаются снизу
         // Ось X — время (unix-секунды).
-        values: (_u, ticks) => ticks.map((t) => new Date(t * 1000).toLocaleTimeString()),
+        values: (_u, vals) => vals.map((t) => new Date(t * 1000).toLocaleTimeString()),
       },
       {
-        stroke: 'rgba(128,128,128,0.9)',
-        grid: { stroke: 'rgba(128,128,128,0.15)' },
-        values: (_u, ticks) => ticks.map((t) => (props.yFormat ? props.yFormat(t) : String(t))),
+        stroke,
+        grid,
+        ticks,
+        font: axisFont,
+        size: 72, // ширина зоны оси Y — «2.1 MiB/s» и т.п. помещаются целиком
+        values: (_u, vals) => vals.map((t) => (props.yFormat ? props.yFormat(t) : String(t))),
       },
     ],
     scales: props.yRange ? { y: { range: props.yRange } } : undefined,
