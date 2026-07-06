@@ -1,13 +1,16 @@
 <script setup lang="ts">
 // Оболочка экранов аутентификации (Login/Setup): анимированный фон по теме,
 // логотип DSMS и центрированная стеклянная карточка. Контент — через слот.
-import { NIcon } from 'naive-ui'
-import { CubeOutline } from '@vicons/ionicons5'
+import { NIcon, NButton } from 'naive-ui'
+import { CubeOutline, SunnyOutline, MoonOutline } from '@vicons/ionicons5'
+import { useThemeStore } from '../stores/theme'
 
 defineProps<{
   /** Подпись под логотипом (по умолчанию — назначение продукта). */
   subtitle?: string
 }>()
+
+const theme = useThemeStore()
 </script>
 
 <template>
@@ -16,6 +19,13 @@ defineProps<{
     <div class="blob blob-1" />
     <div class="blob blob-2" />
     <div class="blob blob-3" />
+
+    <!-- Переключатель темы в углу -->
+    <n-button circle quaternary class="theme-toggle" @click="theme.toggle()">
+      <template #icon>
+        <n-icon :component="theme.isDark ? SunnyOutline : MoonOutline" />
+      </template>
+    </n-button>
 
     <div class="auth-card">
       <div class="brand">
@@ -116,6 +126,26 @@ defineProps<{
 @keyframes card-in {
   from { opacity: 0; transform: translateY(24px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Переключатель темы в правом верхнем углу */
+.theme-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 2;
+  font-size: 18px;
+}
+
+/* Убираем голубой/жёлтый фон автозаполнения Chrome в полях ввода —
+   он «просвечивал» на стеклянной карточке. Держим фон и текст по теме. */
+:deep(input:-webkit-autofill),
+:deep(input:-webkit-autofill:hover),
+:deep(input:-webkit-autofill:focus) {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset;
+  transition: background-color 9999s ease-in-out 0s;
+  -webkit-text-fill-color: currentColor;
+  caret-color: currentColor;
 }
 
 /* --- Логотип и заголовок --- */

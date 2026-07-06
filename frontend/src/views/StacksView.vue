@@ -1,14 +1,13 @@
 <script setup lang="ts">
 // Стеки (FR-08): список с агрегированным статусом,
 // redeploy/remove стека целиком (двойное подтверждение имени).
-import { computed, h, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NCard, NDataTable, NTag, NModal, NInput, useMessage, useDialog } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { RefreshOutline, TrashOutline } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
 import { rowActions } from '../utils/actions'
-import { useAutoRefresh } from '../composables/useAutoRefresh'
 import { api, ApiError } from '../api/client'
 import type { StackInfo } from '../types'
 
@@ -34,8 +33,15 @@ async function load() {
   }
 }
 
-// Периодическое обновление с настраиваемым интервалом (Settings).
-useAutoRefresh(load)
+// Список стеков обновляется на фиксированном интервале.
+let timer: number | null = null
+onMounted(() => {
+  load()
+  timer = window.setInterval(load, 10000)
+})
+onBeforeUnmount(() => {
+  if (timer) window.clearInterval(timer)
+})
 
 function redeploy(stack: StackInfo) {
   dialog.info({

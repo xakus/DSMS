@@ -48,9 +48,11 @@ const lightOverrides: GlobalThemeOverrides = {
   Layout: { siderColor: '#eef0f4', headerColor: '#eef0f4' },
   ...tableOverrides,
 }
+// Тёмная тема — только акцент и радиус поверх штатного darkTheme Naive
+// (он уже даёт хорошие тёмные поверхности; лишние переопределения убраны,
+// чтобы не появлялось «белесой пелены»).
 const darkOverrides: GlobalThemeOverrides = {
   common: {
-    bodyColor: '#101014',
     primaryColor: '#5b8cff',
     primaryColorHover: '#78a2ff',
     primaryColorPressed: '#3d72f0',

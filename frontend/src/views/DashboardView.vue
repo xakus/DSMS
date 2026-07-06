@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Dashboard кластера (FR-01): сводка + сетка карточек нод,
 // живые обновления по WS, модал Add Node с join-командами (3.3.4).
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NCard, NStatistic, NSpace, NButton, NGrid, NGi, NModal,
@@ -9,7 +9,6 @@ import {
 } from 'naive-ui'
 import { CopyOutline, RefreshOutline } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
-import { useAutoRefresh } from '../composables/useAutoRefresh'
 import NodeCard from '../components/NodeCard.vue'
 import { api } from '../api/client'
 import { useMetricsStore } from '../stores/metrics'
@@ -34,18 +33,24 @@ async function refresh() {
     ])
     // Затравка метрик из REST-ответа, дальше — живые по WS.
     for (const n of nodes.value) {
-      if (n.metrics) metrics.latest.set(n.id, n.metrics)
+      if (n.metrics) metrics.seed(n.id, n.metrics)
     }
   } catch {
     message.error(t('common.loadFailed'))
   }
 }
 
+// Состав нод (join/remove) обновляется на фиксированном интервале;
+// живые графики — по «Интервалу обновления графиков» (metrics store).
+let nodesTimer: number | null = null
 onMounted(() => {
   metrics.start()
+  refresh()
+  nodesTimer = window.setInterval(refresh, 15000)
 })
-// Периодическое обновление состава нод (join/remove) с настраиваемым интервалом.
-useAutoRefresh(refresh)
+onBeforeUnmount(() => {
+  if (nodesTimer) window.clearInterval(nodesTimer)
+})
 
 /** Открыть модал Add Node: подтянуть актуальные join-токены. */
 async function openAddNode() {

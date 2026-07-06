@@ -13,9 +13,9 @@ import {
   PlayOutline, PauseOutline, RefreshOutline, ResizeOutline,
   PricetagOutline, ArrowUndoOutline, TrashOutline, DocumentTextOutline,
 } from '@vicons/ionicons5'
+import { onBeforeUnmount, onMounted } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import { rowActions } from '../utils/actions'
-import { useAutoRefresh } from '../composables/useAutoRefresh'
 import { api, ApiError } from '../api/client'
 import type { ServiceInfo } from '../types'
 
@@ -54,8 +54,15 @@ async function load() {
   }
 }
 
-// Периодическое обновление с настраиваемым интервалом (Settings).
-useAutoRefresh(load)
+// Список сервисов обновляется на фиксированном интервале.
+let timer: number | null = null
+onMounted(() => {
+  load()
+  timer = window.setInterval(load, 10000)
+})
+onBeforeUnmount(() => {
+  if (timer) window.clearInterval(timer)
+})
 
 /** Выполнить действие с обновлением списка и обработкой ошибок. */
 async function run(action: () => Promise<unknown>, okMsg = 'OK') {

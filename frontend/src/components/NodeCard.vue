@@ -100,9 +100,10 @@ const stateType = computed(() => {
 .node-card {
   cursor: pointer;
 }
+/* «Агент молчит» — лёгкое приглушение (warning-тег уже сигнализирует),
+   без сильного затемнения, чтобы не выглядело как пелена поверх UI. */
 .node-card.stale {
-  opacity: 0.55;
-  filter: grayscale(0.7);
+  opacity: 0.82;
 }
 .metric-row {
   margin-bottom: 8px;
