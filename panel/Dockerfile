@@ -1,6 +1,11 @@
 # PANEL: multi-stage build → минимальный образ ≤ 25 МБ (NFR-1).
+#
+# ВАЖНО: build-стадии прибиты к $BUILDPLATFORM (нативная архитектура раннера),
+# а под целевую arm64 Go КРОСС-компилирует (GOOS/GOARCH). Без этого buildx
+# гонял компилятор через QEMU-эмуляцию — сборка arm64 занимала ~1 час.
+
 # Стадия 1: сборка фронтенда (статика для go:embed).
-FROM node:22-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -9,14 +14,16 @@ COPY frontend/ ./
 RUN mkdir -p ../panel/web && npm run build
 
 # Стадия 2: сборка Go-бинарника со встроенной статикой.
-FROM golang:1.25-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
+ARG TARGETOS TARGETARCH
 WORKDIR /src/panel
 COPY panel/go.mod panel/go.sum ./
 RUN go mod download
 COPY panel/ ./
 COPY --from=frontend /src/panel/web/dist ./web/dist
 # CGO выключен (sqlite — чистый Go), статический бинарник для scratch.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/panel ./cmd/panel
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w" -o /out/panel ./cmd/panel
 
 # Стадия 3: финальный образ.
 FROM scratch

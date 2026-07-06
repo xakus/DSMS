@@ -25,10 +25,11 @@ const theme = useThemeStore()
     <div class="blob blob-2" />
     <div class="blob blob-3" />
 
-    <!-- Переключатель темы в углу -->
+    <!-- Переключатель темы: иконка = ТЕКУЩАЯ тема (как в шапке приложения:
+         тёмная → луна, светлая → солнце). Раньше было наоборот — инверсия. -->
     <n-button circle quaternary class="theme-toggle" @click="theme.toggle()">
       <template #icon>
-        <n-icon :component="theme.isDark ? SunnyOutline : MoonOutline" />
+        <n-icon :component="theme.isDark ? MoonOutline : SunnyOutline" />
       </template>
     </n-button>
 
