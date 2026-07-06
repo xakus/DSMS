@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Таблица сервисов (FR-04 3.4.1–3.4.3): группировка по стекам,
 // цветовая индикация реплик, быстрые действия в строке.
-import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, h, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -15,6 +15,7 @@ import {
 } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
 import { rowActions } from '../utils/actions'
+import { useAutoRefresh } from '../composables/useAutoRefresh'
 import { api, ApiError } from '../api/client'
 import type { ServiceInfo } from '../types'
 
@@ -30,7 +31,6 @@ function goLogs(svc: ServiceInfo) {
 
 const services = ref<ServiceInfo[]>([])
 const loading = ref(false)
-let timer: number | null = null
 
 // Модал Scale
 const scaleTarget = ref<ServiceInfo | null>(null)
@@ -54,13 +54,8 @@ async function load() {
   }
 }
 
-onMounted(() => {
-  load()
-  timer = window.setInterval(load, 10000)
-})
-onBeforeUnmount(() => {
-  if (timer) window.clearInterval(timer)
-})
+// Периодическое обновление с настраиваемым интервалом (Settings).
+useAutoRefresh(load)
 
 /** Выполнить действие с обновлением списка и обработкой ошибок. */
 async function run(action: () => Promise<unknown>, okMsg = 'OK') {

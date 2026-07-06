@@ -11,6 +11,16 @@ const theme = useThemeStore()
 // Переопределения общих токенов — единый акцент и мягкий фон в обеих темах.
 // Светлая была слишком белой/неконтрастной, поэтому фон — тёплый серый,
 // карточки остаются белыми и «всплывают» за счёт контраста.
+// Более просторные ячейки таблиц — иначе текст в соседних колонках слипается.
+const tableOverrides = {
+  DataTable: {
+    thPaddingSmall: '10px 16px',
+    tdPaddingSmall: '10px 16px',
+    thPadding: '12px 16px',
+    tdPadding: '12px 16px',
+    fontSizeSmall: '13px',
+  },
+}
 const lightOverrides: GlobalThemeOverrides = {
   common: {
     bodyColor: '#f2f3f5',
@@ -24,6 +34,7 @@ const lightOverrides: GlobalThemeOverrides = {
     borderRadius: '8px',
     textColorBase: '#1f2329',
   },
+  ...tableOverrides,
 }
 const darkOverrides: GlobalThemeOverrides = {
   common: {
@@ -34,6 +45,7 @@ const darkOverrides: GlobalThemeOverrides = {
     primaryColorSuppl: '#78a2ff',
     borderRadius: '8px',
   },
+  ...tableOverrides,
 }
 
 const overrides = computed(() => (theme.isDark ? darkOverrides : lightOverrides))

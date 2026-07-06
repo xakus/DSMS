@@ -1,12 +1,13 @@
 <script setup lang="ts">
 // Страница сервиса (FR-04 3.4.4): спецификация read-only,
 // задачи с историей (state, exit code, нода, время), статус update.
-import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, h, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { NCard, NDataTable, NTag, NSpace, NButton, NDescriptions, NDescriptionsItem, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import AppLayout from '../components/AppLayout.vue'
+import { useAutoRefresh } from '../composables/useAutoRefresh'
 import { api } from '../api/client'
 import type { ServiceDetail, ServiceTask } from '../types'
 
@@ -16,7 +17,6 @@ const message = useMessage()
 
 const serviceId = route.params.id as string
 const svc = ref<ServiceDetail | null>(null)
-let timer: number | null = null
 
 async function load() {
   try {
@@ -26,13 +26,8 @@ async function load() {
   }
 }
 
-onMounted(() => {
-  load()
-  timer = window.setInterval(load, 10000)
-})
-onBeforeUnmount(() => {
-  if (timer) window.clearInterval(timer)
-})
+// Периодическое обновление с настраиваемым интервалом (Settings).
+useAutoRefresh(load)
 
 /** Цвет состояния задачи (разд. 6.3). */
 function stateType(s: string): 'success' | 'error' | 'warning' | 'default' {

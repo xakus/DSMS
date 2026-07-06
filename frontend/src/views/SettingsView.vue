@@ -14,17 +14,25 @@ import { rowActions } from '../utils/actions'
 import AppLayout from '../components/AppLayout.vue'
 import { api, ApiError } from '../api/client'
 import { useAuthStore } from '../stores/auth'
+import { useUiStore } from '../stores/ui'
 import type { RegistryInfo } from '../types'
 
 const { t } = useI18n()
 const message = useMessage()
 const router = useRouter()
 const auth = useAuthStore()
+const ui = useUiStore()
 
 // --- General: смена пароля + порог disk-алерта + ретенция истории ---
 const pwForm = ref({ old: '', new: '' })
 const diskPct = ref(90)
 const retentionDays = ref(7)
+
+// Интервал обновления (локальная UI-настройка), в секундах для удобства.
+const refreshSec = computed({
+  get: () => ui.refreshMs / 1000,
+  set: (s: number) => ui.setRefreshMs(Math.round(s * 1000)),
+})
 
 /** Загрузить настройки панели. */
 async function loadSettings() {
@@ -151,6 +159,20 @@ const columns = computed<DataTableColumns<RegistryInfo>>(() => [
               </n-form>
             </n-card>
 
+            <!-- Интерфейс: интервал обновления (локально в браузере, сразу) -->
+            <n-card :title="t('settings.interface')" size="small">
+              <n-form label-placement="top">
+                <n-form-item :label="t('settings.refreshInterval')">
+                  <n-space vertical style="width: 100%">
+                    <n-input-number v-model:value="refreshSec" :min="0.5" :max="30" :step="0.5" class="num">
+                      <template #suffix>{{ t('settings.sec') }}</template>
+                    </n-input-number>
+                    <span class="hint">{{ t('settings.refreshHint') }}</span>
+                  </n-space>
+                </n-form-item>
+              </n-form>
+            </n-card>
+
             <!-- Мониторинг: пороги алертов + ретенция истории (применяется на лету) -->
             <n-card :title="t('settings.monitoring')" size="small">
               <n-form label-placement="top">
@@ -177,6 +199,10 @@ docker service update --secret-rm agent_token --secret-add agent_token dsms_agen
         </n-tab-pane>
         <n-tab-pane name="registries" :tab="t('settings.registries')">
           <n-space vertical>
+            <!-- Что такое реестры и зачем они -->
+            <n-alert type="info" :show-icon="true" :bordered="false" :title="t('settings.regWhatTitle')">
+              {{ t('settings.regWhat') }}
+            </n-alert>
             <n-space justify="end">
               <n-button size="small" type="primary" @click="openCreate">
                 <template #icon><n-icon :component="AddOutline" /></template>
@@ -232,5 +258,9 @@ docker service update --secret-rm agent_token --secret-add agent_token dsms_agen
   font-size: 12px;
   overflow-x: auto;
   white-space: pre-wrap;
+}
+.hint {
+  font-size: 12px;
+  opacity: 0.65;
 }
 </style>

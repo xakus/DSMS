@@ -1,15 +1,19 @@
 <script setup lang="ts">
 // Каркас авторизованной части: сайдбар-навигация + шапка
 // (тема, язык, logout). Экраны рендерятся в слот.
-import { computed, h } from 'vue'
+import { computed, h, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { onMounted } from 'vue'
 import {
   NLayout, NLayoutSider, NLayoutHeader, NLayoutContent,
-  NMenu, NButton, NSpace, NSelect, NBadge, useMessage,
+  NMenu, NButton, NSpace, NSelect, NBadge, NIcon, NTooltip, useMessage,
 } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
+import {
+  SpeedometerOutline, CubeOutline, LayersOutline, DocumentTextOutline,
+  PulseOutline, KeyOutline, ServerOutline, WarningOutline, SettingsOutline,
+} from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { useMetricsStore } from '../stores/metrics'
@@ -35,17 +39,34 @@ onMounted(() => {
   })
 })
 
-// Пункты меню. Экраны этапов 4+ добавляются сюда по мере реализации.
+/** Собрать пункт меню: иконка + подпись-ссылка с тултипом-описанием. */
+function item(key: string, icon: Component): MenuOption {
+  return {
+    key,
+    icon: () => h(NIcon, null, { default: () => h(icon) }),
+    // Тултип справа объясняет, что за раздел (описания в i18n navDesc.*).
+    label: () =>
+      h(
+        NTooltip,
+        { placement: 'right', delay: 400 },
+        {
+          trigger: () => h(RouterLink, { to: { name: key } }, { default: () => t(`nav.${key}`) }),
+          default: () => t(`navDesc.${key}`),
+        },
+      ),
+  }
+}
+
 const menu = computed<MenuOption[]>(() => [
-  { label: () => h(RouterLink, { to: { name: 'dashboard' } }, { default: () => t('nav.dashboard') }), key: 'dashboard' },
-  { label: () => h(RouterLink, { to: { name: 'services' } }, { default: () => t('nav.services') }), key: 'services' },
-  { label: () => h(RouterLink, { to: { name: 'stacks' } }, { default: () => t('nav.stacks') }), key: 'stacks' },
-  { label: () => h(RouterLink, { to: { name: 'logs' } }, { default: () => t('nav.logs') }), key: 'logs' },
-  { label: () => h(RouterLink, { to: { name: 'events' } }, { default: () => t('nav.events') }), key: 'events' },
-  { label: () => h(RouterLink, { to: { name: 'resources' } }, { default: () => t('nav.resources') }), key: 'resources' },
-  { label: () => h(RouterLink, { to: { name: 'disk' } }, { default: () => t('nav.disk') }), key: 'disk' },
-  { label: () => h(RouterLink, { to: { name: 'alerts' } }, { default: () => t('nav.alerts') }), key: 'alerts' },
-  { label: () => h(RouterLink, { to: { name: 'settings' } }, { default: () => t('nav.settings') }), key: 'settings' },
+  item('dashboard', SpeedometerOutline),
+  item('services', CubeOutline),
+  item('stacks', LayersOutline),
+  item('logs', DocumentTextOutline),
+  item('events', PulseOutline),
+  item('resources', KeyOutline),
+  item('disk', ServerOutline),
+  item('alerts', WarningOutline),
+  item('settings', SettingsOutline),
 ])
 
 /** Языки интерфейса (разд. 6.1: EN базовый, RU; AZ добавится тривиально). */

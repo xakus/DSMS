@@ -9,6 +9,7 @@ import {
 } from 'naive-ui'
 import { CopyOutline, RefreshOutline } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
+import { useAutoRefresh } from '../composables/useAutoRefresh'
 import NodeCard from '../components/NodeCard.vue'
 import { api } from '../api/client'
 import { useMetricsStore } from '../stores/metrics'
@@ -42,10 +43,9 @@ async function refresh() {
 
 onMounted(() => {
   metrics.start()
-  refresh()
-  // Периодическое обновление состава нод (join/remove) — раз в 15с.
-  window.setInterval(refresh, 15000)
 })
+// Периодическое обновление состава нод (join/remove) с настраиваемым интервалом.
+useAutoRefresh(refresh)
 
 /** Открыть модал Add Node: подтянуть актуальные join-токены. */
 async function openAddNode() {
