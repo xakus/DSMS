@@ -1,6 +1,11 @@
 <script setup lang="ts">
 // Оболочка экранов аутентификации (Login/Setup): анимированный фон по теме,
-// логотип DSMS и центрированная стеклянная карточка. Контент — через слот.
+// логотип DSMS и центрированная карточка. Контент — через слот.
+//
+// ВАЖНО: тема применяется через класс .dark на корне компонента, а НЕ через
+// :global(:root[data-theme]) — Vue scoped-компилятор отбрасывал хвост
+// селектора после :global(), из-за чего opacity/фон применялись ко всему
+// <html> (белая «пелена» на всё приложение) — см. фикс v1.0.8.
 import { NIcon, NButton } from 'naive-ui'
 import { CubeOutline, SunnyOutline, MoonOutline } from '@vicons/ionicons5'
 import { useThemeStore } from '../stores/theme'
@@ -14,7 +19,7 @@ const theme = useThemeStore()
 </script>
 
 <template>
-  <div class="auth-page">
+  <div class="auth-page" :class="{ dark: theme.isDark }">
     <!-- Анимированный фон: медленно плавающие цветные пятна -->
     <div class="blob blob-1" />
     <div class="blob blob-2" />
@@ -41,7 +46,7 @@ const theme = useThemeStore()
 </template>
 
 <style scoped>
-/* Полноэкранная сцена; фон по теме через data-theme на <html>. */
+/* Полноэкранная сцена входа. Светлая тема — чистый светлый фон. */
 .auth-page {
   position: fixed;
   inset: 0;
@@ -49,62 +54,62 @@ const theme = useThemeStore()
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #e6e8ee;
+  background: #eef0f4;
 }
-:global(:root[data-theme='dark']) .auth-page {
+.auth-page.dark {
   background: #0c0d12;
 }
 
-/* --- Анимированные цветные пятна фона --- */
+/* --- Анимированные цветные пятна фона ---
+   Компактные и не слишком размытые — иначе светлая тема выглядела «в тумане». */
 .blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(70px);
-  opacity: 0.5;
+  filter: blur(48px);
+  opacity: 0.38;
   will-change: transform;
 }
+.auth-page.dark .blob {
+  opacity: 0.3;
+}
 .blob-1 {
-  width: 420px;
-  height: 420px;
+  width: 380px;
+  height: 380px;
   background: #3b5bdb;
-  top: -80px;
-  left: -60px;
+  top: -60px;
+  left: -40px;
   animation: float1 16s ease-in-out infinite;
 }
 .blob-2 {
-  width: 360px;
-  height: 360px;
-  background: #63b3ed;
-  bottom: -100px;
-  right: -40px;
+  width: 320px;
+  height: 320px;
+  background: #4dabf7;
+  bottom: -80px;
+  right: -30px;
   animation: float2 20s ease-in-out infinite;
 }
 .blob-3 {
-  width: 300px;
-  height: 300px;
-  background: #9f7aea;
-  bottom: 40px;
-  left: 20%;
+  width: 260px;
+  height: 260px;
+  background: #9775fa;
+  bottom: 60px;
+  left: 18%;
   animation: float3 24s ease-in-out infinite;
-}
-:global(:root[data-theme='dark']) .blob {
-  opacity: 0.28;
 }
 @keyframes float1 {
   0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(60px, 40px) scale(1.15); }
+  50% { transform: translate(60px, 40px) scale(1.12); }
 }
 @keyframes float2 {
   0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-50px, -30px) scale(1.1); }
+  50% { transform: translate(-50px, -30px) scale(1.08); }
 }
 @keyframes float3 {
   0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(30px, -50px) scale(1.2); }
+  50% { transform: translate(30px, -50px) scale(1.15); }
 }
 
-/* --- Карточка входа: НЕПРОЗРАЧНЫЙ фон по теме, без стекла ---
-   (backdrop-blur давал «туман» в светлой теме и артефакты при переходе). */
+/* --- Карточка входа: непрозрачная, по теме --- */
 .auth-card {
   position: relative;
   z-index: 1;
@@ -117,9 +122,9 @@ const theme = useThemeStore()
   box-shadow: 0 20px 50px rgba(20, 23, 33, 0.18);
   animation: card-in 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
-:global(:root[data-theme='dark']) .auth-card {
-  background: #1a1c22;
-  border-color: rgba(255, 255, 255, 0.08);
+.auth-page.dark .auth-card {
+  background: #17191f;
+  border-color: rgba(255, 255, 255, 0.09);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
 }
 @keyframes card-in {
@@ -136,8 +141,7 @@ const theme = useThemeStore()
   font-size: 18px;
 }
 
-/* Убираем голубой/жёлтый фон автозаполнения Chrome в полях ввода —
-   он «просвечивал» на стеклянной карточке. Держим фон и текст по теме. */
+/* Убираем цветной фон автозаполнения Chrome в полях ввода. */
 :deep(input:-webkit-autofill),
 :deep(input:-webkit-autofill:hover),
 :deep(input:-webkit-autofill:focus) {
@@ -175,7 +179,7 @@ const theme = useThemeStore()
 }
 .brand-sub {
   font-size: 14px;
-  opacity: 0.6;
+  opacity: 0.65;
   margin-top: 2px;
 }
 
