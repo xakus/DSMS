@@ -120,11 +120,7 @@ async function logout() {
         </n-space>
       </n-layout-header>
       <n-layout-content class="content">
-        <!-- Контент центрируется и ограничивается по ширине — на больших
-             экранах не прижимается к левому краю. -->
-        <div class="content-inner">
-          <slot />
-        </div>
+        <slot />
       </n-layout-content>
     </n-layout>
   </n-layout>
@@ -147,7 +143,7 @@ async function logout() {
   letter-spacing: 0.5px;
 }
 .logo-full {
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.3;
   opacity: 0.55;
   text-transform: uppercase;
@@ -157,12 +153,7 @@ async function logout() {
   padding: 8px 16px;
 }
 .content {
-  padding: 20px 24px;
-}
-/* Центрирование и ограничение ширины контента на широких экранах. */
-.content-inner {
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: 20px 28px;
 }
 .lang {
   width: 72px;

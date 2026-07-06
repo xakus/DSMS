@@ -255,12 +255,12 @@ docker service update --secret-rm agent_token --secret-add agent_token dsms_agen
   width: 200px;
 }
 .cli {
-  font-size: 12px;
+  font-size: 14px;
   overflow-x: auto;
   white-space: pre-wrap;
 }
 .hint {
-  font-size: 12px;
+  font-size: 14px;
   opacity: 0.65;
 }
 </style>

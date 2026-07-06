@@ -131,7 +131,7 @@ function prune(node: NodeDF, target: string, reclaimable: number) {
 }
 .df-rec {
   width: 190px;
-  font-size: 12px;
+  font-size: 14px;
   opacity: 0.7;
 }
 .empty {

@@ -404,7 +404,7 @@ async function saveLabels() {
   margin-bottom: 16px;
 }
 .sysline {
-  font-size: 12px;
+  font-size: 14px;
   opacity: 0.65;
 }
 .labels-modal {

@@ -58,7 +58,7 @@ async function submit() {
 <style scoped>
 .hint {
   text-align: center;
-  font-size: 13px;
+  font-size: 14px;
   opacity: 0.7;
   margin: -12px 0 20px;
 }

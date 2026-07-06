@@ -102,7 +102,7 @@ const taskColumns = computed<DataTableColumns<ServiceTask>>(() => [
 /* Моноширинный текст спецификации */
 .mono {
   font-family: monospace;
-  font-size: 12px;
+  font-size: 14px;
 }
 .mb {
   margin-bottom: 16px;

@@ -174,7 +174,7 @@ const theme = useThemeStore()
   -webkit-text-fill-color: transparent;
 }
 .brand-sub {
-  font-size: 13px;
+  font-size: 14px;
   opacity: 0.6;
   margin-top: 2px;
 }

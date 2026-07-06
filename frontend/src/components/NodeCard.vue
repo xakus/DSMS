@@ -109,18 +109,18 @@ const stateType = computed(() => {
   margin-bottom: 8px;
 }
 .label {
-  font-size: 12px;
+  font-size: 14px;
   opacity: 0.8;
 }
 .footer-row {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 14px;
   opacity: 0.85;
   margin-top: 4px;
 }
 .addr {
-  font-size: 11px;
+  font-size: 14px;
   opacity: 0.5;
   margin-top: 4px;
 }

@@ -279,10 +279,10 @@ const volumeColumns = computed<DataTableColumns<VolumeRow>>(() => [
 .cfg-view {
   max-height: 60vh;
   overflow: auto;
-  font-size: 12px;
+  font-size: 14px;
 }
 .hint {
-  font-size: 12px;
+  font-size: 14px;
   opacity: 0.65;
 }
 </style>
