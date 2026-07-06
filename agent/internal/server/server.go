@@ -76,11 +76,19 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// writeErr отдаёт реальную ошибку Docker в JSON — чтобы в UI была видна
+// причина (например «rw layer snapshot not found …»), а не общий текст.
+func writeErr(w http.ResponseWriter, code int, err error) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+}
+
 // df — GET /api/v1/df: локальный docker system df (3.11.1).
 func (s *Server) df(w http.ResponseWriter, r *http.Request) {
 	out, err := s.ops.DiskUsage(r.Context())
 	if err != nil {
-		http.Error(w, `{"error":"docker df failed"}`, http.StatusBadGateway)
+		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
 	writeJSON(w, out)
@@ -90,7 +98,7 @@ func (s *Server) df(w http.ResponseWriter, r *http.Request) {
 func (s *Server) volumes(w http.ResponseWriter, r *http.Request) {
 	out, err := s.ops.Volumes(r.Context())
 	if err != nil {
-		http.Error(w, `{"error":"docker volumes failed"}`, http.StatusBadGateway)
+		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
 	writeJSON(w, out)
