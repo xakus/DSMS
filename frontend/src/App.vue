@@ -23,17 +23,29 @@ const tableOverrides = {
 }
 const lightOverrides: GlobalThemeOverrides = {
   common: {
-    bodyColor: '#f2f3f5',
+    // Насыщенный светло-серый фон + чисто-белые карточки = чёткий контраст.
+    bodyColor: '#e6e8ee',
     cardColor: '#ffffff',
     modalColor: '#ffffff',
     popoverColor: '#ffffff',
-    primaryColor: '#2563eb',
-    primaryColorHover: '#3b82f6',
-    primaryColorPressed: '#1d4ed8',
-    primaryColorSuppl: '#3b82f6',
-    borderRadius: '8px',
-    textColorBase: '#1f2329',
+    tableColor: '#ffffff',
+    // Заметные границы и разделители — раньше сливались.
+    borderColor: '#d3d7e0',
+    dividerColor: '#dcdfe7',
+    // Индиго-акцент хорошо сочетается с нейтральными серыми.
+    primaryColor: '#3b5bdb',
+    primaryColorHover: '#4c6ef5',
+    primaryColorPressed: '#364fc7',
+    primaryColorSuppl: '#4c6ef5',
+    borderRadius: '10px',
+    // Контрастная типографика (три уровня).
+    textColorBase: '#171a21',
+    textColor1: '#171a21',
+    textColor2: '#3b414f',
+    textColor3: '#6b7280',
   },
+  Card: { borderColor: '#e2e5ec' },
+  Layout: { siderColor: '#eef0f4', headerColor: '#eef0f4' },
   ...tableOverrides,
 }
 const darkOverrides: GlobalThemeOverrides = {
@@ -70,9 +82,15 @@ html, body, #app {
 }
 :root,
 :root[data-theme='light'] {
-  background: #f2f3f5;
+  background: #e6e8ee;
 }
 :root[data-theme='dark'] {
   background: #101014;
+}
+
+/* В светлой теме карточки «всплывают» над серым фоном за счёт мягкой тени —
+   иначе белое на светло-сером почти сливается. */
+:root[data-theme='light'] .n-card {
+  box-shadow: 0 1px 2px rgba(20, 23, 33, 0.05), 0 4px 12px rgba(20, 23, 33, 0.05);
 }
 </style>

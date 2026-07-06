@@ -1,9 +1,12 @@
 <script setup lang="ts">
 // Экран первичной настройки: создание admin-аккаунта (FR-07 3.7.1).
+// Тот же стиль, что и вход — через оболочку AuthShell.
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NCard, NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, NIcon, useMessage } from 'naive-ui'
+import { PersonOutline, LockClosedOutline } from '@vicons/ionicons5'
+import AuthShell from '../components/AuthShell.vue'
 import { api, ApiError } from '../api/client'
 
 const router = useRouter()
@@ -29,33 +32,34 @@ async function submit() {
 </script>
 
 <template>
-  <div class="setup-wrap">
-    <n-card :title="t('setup.title')" class="setup-card">
-      <p>{{ t('setup.hint') }}</p>
-      <n-form @submit.prevent="submit">
-        <n-form-item :label="t('login.username')">
-          <n-input v-model:value="username" autofocus />
-        </n-form-item>
-        <n-form-item :label="t('login.password')">
-          <n-input v-model:value="password" type="password" show-password-on="click" />
-        </n-form-item>
-        <n-button type="primary" block :loading="loading" attr-type="submit">
-          {{ t('setup.submit') }}
-        </n-button>
-      </n-form>
-    </n-card>
-  </div>
+  <AuthShell :subtitle="t('setup.title')">
+    <p class="hint">{{ t('setup.hint') }}</p>
+    <n-form @submit.prevent="submit">
+      <n-form-item :label="t('login.username')">
+        <n-input v-model:value="username" size="large" autofocus :placeholder="t('login.username')">
+          <template #prefix><n-icon :component="PersonOutline" /></template>
+        </n-input>
+      </n-form-item>
+      <n-form-item :label="t('login.password')">
+        <n-input
+          v-model:value="password" type="password" size="large" show-password-on="click"
+          :placeholder="t('login.password')" @keyup.enter="submit"
+        >
+          <template #prefix><n-icon :component="LockClosedOutline" /></template>
+        </n-input>
+      </n-form-item>
+      <n-button type="primary" size="large" block :loading="loading" attr-type="submit">
+        {{ t('setup.submit') }}
+      </n-button>
+    </n-form>
+  </AuthShell>
 </template>
 
 <style scoped>
-/* Центрирование карточки настройки на весь экран */
-.setup-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
-.setup-card {
-  width: 360px;
+.hint {
+  text-align: center;
+  font-size: 13px;
+  opacity: 0.7;
+  margin: -12px 0 20px;
 }
 </style>

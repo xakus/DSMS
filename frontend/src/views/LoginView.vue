@@ -1,10 +1,12 @@
 <script setup lang="ts">
-// Экран входа (разд. 6.2 ТЗ: минимальный, лого + форма).
-// При первом запуске панель сообщает needs_setup → редирект на /setup.
+// Экран входа (разд. 6.2 ТЗ): оболочка AuthShell (анимированный фон + карточка).
+// При первом запуске панель сообщает needs_setup → редирект на /setup (3.7.1).
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NCard, NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, NIcon, useMessage } from 'naive-ui'
+import { PersonOutline, LockClosedOutline } from '@vicons/ionicons5'
+import AuthShell from '../components/AuthShell.vue'
 import { api } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 
@@ -42,32 +44,30 @@ async function submit() {
 </script>
 
 <template>
-  <div class="login-wrap">
-    <n-card :title="t('login.title')" class="login-card">
-      <n-form @submit.prevent="submit">
-        <n-form-item :label="t('login.username')">
-          <n-input v-model:value="username" autofocus />
-        </n-form-item>
-        <n-form-item :label="t('login.password')">
-          <n-input v-model:value="password" type="password" show-password-on="click" @keyup.enter="submit" />
-        </n-form-item>
-        <n-button type="primary" block :loading="loading" attr-type="submit">
-          {{ t('login.submit') }}
-        </n-button>
-      </n-form>
-    </n-card>
-  </div>
+  <AuthShell>
+    <n-form @submit.prevent="submit">
+      <n-form-item :label="t('login.username')">
+        <n-input v-model:value="username" size="large" autofocus :placeholder="t('login.username')">
+          <template #prefix><n-icon :component="PersonOutline" /></template>
+        </n-input>
+      </n-form-item>
+      <n-form-item :label="t('login.password')">
+        <n-input
+          v-model:value="password" type="password" size="large" show-password-on="click"
+          :placeholder="t('login.password')" @keyup.enter="submit"
+        >
+          <template #prefix><n-icon :component="LockClosedOutline" /></template>
+        </n-input>
+      </n-form-item>
+      <n-button type="primary" size="large" block :loading="loading" attr-type="submit" class="submit-btn">
+        {{ t('login.submit') }}
+      </n-button>
+    </n-form>
+  </AuthShell>
 </template>
 
 <style scoped>
-/* Центрирование карточки входа на весь экран */
-.login-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
-.login-card {
-  width: 360px;
+.submit-btn {
+  margin-top: 6px;
 }
 </style>
