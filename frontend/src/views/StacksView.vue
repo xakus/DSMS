@@ -5,7 +5,7 @@ import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NCard, NDataTable, NTag, NModal, NInput, useMessage, useDialog } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { RefreshOutline, TrashOutline } from '@vicons/ionicons5'
+import { RefreshOutline, TrashOutline, CloudDownloadOutline } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
 import { rowActions } from '../utils/actions'
 import { api, ApiError } from '../api/client'
@@ -60,6 +60,26 @@ function redeploy(stack: StackInfo) {
   })
 }
 
+// Деплой всего стека: каждому сервису тянет свежий образ по тегу (в отличие
+// от redeploy, который перезапускает те же digest'ы) и катит без простоя.
+function deploy(stack: StackInfo) {
+  dialog.info({
+    title: t('stacks.deployConfirm', { name: stack.name }),
+    content: t('stacks.deployHint'),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      try {
+        await api(`/stacks/${stack.name}/deploy`, { method: 'POST' })
+        message.success('OK')
+        await load()
+      } catch (e) {
+        message.error(e instanceof ApiError ? e.message : 'error')
+      }
+    },
+  })
+}
+
 function openRemove(stack: StackInfo) {
   removeTarget.value = stack
   removeConfirmName.value = ''
@@ -96,6 +116,7 @@ const columns = computed<DataTableColumns<StackInfo>>(() => [
     title: t('services.actions'), key: 'actions', width: 120,
     render: (row) => row.name === '(no stack)' ? null :
       rowActions([
+        { icon: CloudDownloadOutline, tip: t('stacks.deployTip'), type: 'primary', onClick: () => deploy(row) },
         { icon: RefreshOutline, tip: t('stacks.redeployTip'), onClick: () => redeploy(row) },
         { icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => openRemove(row) },
       ]),

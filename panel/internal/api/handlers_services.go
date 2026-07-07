@@ -315,6 +315,64 @@ func (h *handlers) forceUpdate(r *http.Request, id string) error {
 	return err
 }
 
+// serviceDeploy — POST /services/{id}/deploy {registry_id?}: тянет свежую
+// версию образа по текущему тегу и катит zero-downtime обновление.
+// Отличие от redeploy: сбрасывается pinned digest и включается QueryRegistry,
+// поэтому Swarm заново резолвит тег в реестре (аналог
+// `docker service update --image repo:tag`). Порядок — start-first: новая
+// задача поднимается раньше, чем убивается старая.
+func (h *handlers) serviceDeploy(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	// registry_id опционален — для приватных реестров (FR-13).
+	var req struct {
+		RegistryID *int64 `json:"registry_id"`
+	}
+	// Тело может отсутствовать — это не ошибка.
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	svc, err := h.Docker.ServiceInspect(r.Context(), id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "service not found")
+		return
+	}
+
+	regAuth := ""
+	if req.RegistryID != nil {
+		regAuth, err = h.registryAuthHeader(*req.RegistryID)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "registry auth failed")
+			return
+		}
+	}
+
+	if err := h.deployService(r, svc, regAuth); err != nil {
+		writeErr(w, http.StatusBadGateway, "deploy failed")
+		return
+	}
+	s := sessionFrom(r)
+	_ = h.Store.AppendAudit(s.UserID, "service.deploy", "service", id, "")
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+// deployService катит один сервис на свежий образ: сбрасывает pinned
+// digest, форсит перекат и включает start-first. Переиспользуется
+// serviceDeploy и stackDeploy (FR-08).
+func (h *handlers) deployService(r *http.Request, svc swarm.Service, regAuth string) error {
+	spec := svc.Spec
+	// Отрезаем @sha256:... — иначе Swarm дёрнет тот же самый образ.
+	spec.TaskTemplate.ContainerSpec.Image = shortImage(spec.TaskTemplate.ContainerSpec.Image)
+	// Форсим перекат, даже если digest не изменился.
+	spec.TaskTemplate.ForceUpdate++
+	// start-first: старую задачу убиваем только после подъёма новой.
+	if spec.UpdateConfig == nil {
+		spec.UpdateConfig = &swarm.UpdateConfig{}
+	}
+	spec.UpdateConfig.Order = swarm.UpdateOrderStartFirst
+
+	_, err := h.Docker.ServiceDeploy(r.Context(), svc.ID, svc.Version, spec, regAuth)
+	return err
+}
+
 // serviceImage — POST /services/{id}/image {image, registry_id?} (3.4.3, FR-13).
 func (h *handlers) serviceImage(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")

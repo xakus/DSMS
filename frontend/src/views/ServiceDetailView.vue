@@ -4,15 +4,38 @@
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NCard, NDataTable, NTag, NSpace, NButton, NDescriptions, NDescriptionsItem, useMessage } from 'naive-ui'
+import { NCard, NDataTable, NTag, NSpace, NButton, NDescriptions, NDescriptionsItem, useMessage, useDialog } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import AppLayout from '../components/AppLayout.vue'
-import { api } from '../api/client'
+import { api, ApiError } from '../api/client'
 import type { ServiceDetail, ServiceTask } from '../types'
 
 const route = useRoute()
 const { t } = useI18n()
 const message = useMessage()
+const dialog = useDialog()
+
+// Деплой: тянет свежую версию образа по текущему тегу (в отличие от
+// redeploy — тот же digest) и катит без простоя.
+function deploy() {
+  if (!svc.value) return
+  const s = svc.value
+  dialog.info({
+    title: t('services.deployConfirm', { name: s.name }),
+    content: t('services.deployHint'),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      try {
+        await api(`/services/${s.id}/deploy`, { method: 'POST' })
+        message.success('OK')
+        await load()
+      } catch (e) {
+        message.error(e instanceof ApiError ? e.message : 'error')
+      }
+    },
+  })
+}
 
 const serviceId = route.params.id as string
 const svc = ref<ServiceDetail | null>(null)
@@ -65,10 +88,16 @@ const taskColumns = computed<DataTableColumns<ServiceTask>>(() => [
           <n-tag v-if="svc.stack" :bordered="false" type="info">{{ svc.stack }}</n-tag>
           <n-tag v-if="svc.update" :bordered="false" type="warning">⟳ {{ svc.update.state }}</n-tag>
         </n-space>
-        <!-- Вкладка Logs страницы сервиса (3.5) — переход на экран логов -->
-        <n-button size="small" @click="$router.push({ name: 'logs', query: { service: svc.id } })">
-          📜 {{ t('nav.logs') }}
-        </n-button>
+        <n-space align="center">
+          <!-- Деплой: подтянуть свежий образ по текущему тегу -->
+          <n-button size="small" type="primary" @click="deploy">
+            ☁️ {{ t('services.deployBtn') }}
+          </n-button>
+          <!-- Вкладка Logs страницы сервиса (3.5) — переход на экран логов -->
+          <n-button size="small" @click="$router.push({ name: 'logs', query: { service: svc.id } })">
+            📜 {{ t('nav.logs') }}
+          </n-button>
+        </n-space>
       </n-space>
 
       <!-- Спецификация read-only (3.4.4) -->

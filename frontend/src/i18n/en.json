@@ -99,12 +99,16 @@
     "updateImage": "Update image",
     "startTip": "Start (restore replicas)",
     "stopTip": "Stop (scale to 0)",
+    "deployTip": "Deploy (pull latest image)",
+    "deployBtn": "Deploy",
     "redeployTip": "Force redeploy",
     "scaleTip": "Scale",
     "imageTip": "Update image",
     "rollbackTip": "Rollback",
     "stopConfirm": "Stop service {name}? (scale to 0, replicas will be remembered)",
     "redeployConfirm": "Force redeploy {name}?",
+    "deployConfirm": "Deploy {name}?",
+    "deployHint": "The panel will re-pull the latest image for the current tag and replace old containers with new ones with no downtime (old is removed after the new one is up).",
     "rollbackConfirm": "Rollback {name} to previous spec?",
     "removeTitle": "Remove service",
     "removeHint": "Type the service name «{name}» to confirm removal."
@@ -112,8 +116,11 @@
   "stacks": {
     "name": "Stack",
     "services": "Services",
+    "deployTip": "Deploy stack (pull latest images)",
     "redeployTip": "Redeploy stack",
     "redeployConfirm": "Force redeploy all services of stack {name}?",
+    "deployConfirm": "Deploy stack {name}?",
+    "deployHint": "For each service in the stack the panel will re-pull the latest image for the current tag and replace containers with no downtime.",
     "removeTitle": "Remove stack",
     "removeHint": "This removes all {count} services of the stack. Type «{name}» to confirm."
   },

@@ -75,6 +75,34 @@ func TestServiceRedeploy(t *testing.T) {
 	}
 }
 
+// TestServiceDeploy: сбрасывает pinned digest, включает start-first и
+// бампает ForceUpdate — свежая версия образа по тому же тегу без простоя.
+func TestServiceDeploy(t *testing.T) {
+	fd := clusterWithServices()
+	// Пиннутый digest — как Swarm хранит после первого запуска.
+	fd.services[0].Spec.TaskTemplate.ContainerSpec.Image =
+		"nginx:1.27@sha256:deadbeef"
+	srv, _ := newTestServer(t, fd)
+	client, csrf := loginClient(t, srv)
+
+	before := fd.services[0].Spec.TaskTemplate.ForceUpdate
+	resp := postJSON(t, client, srv.URL+"/api/v1/services/s1/deploy", nil,
+		map[string]string{"X-CSRF-Token": csrf})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("deploy: got %d", resp.StatusCode)
+	}
+	spec := fd.services[0].Spec
+	if got := spec.TaskTemplate.ContainerSpec.Image; got != "nginx:1.27" {
+		t.Fatalf("digest must be stripped: got %q", got)
+	}
+	if got := spec.TaskTemplate.ForceUpdate; got != before+1 {
+		t.Fatalf("ForceUpdate: want %d, got %d", before+1, got)
+	}
+	if spec.UpdateConfig == nil || spec.UpdateConfig.Order != swarm.UpdateOrderStartFirst {
+		t.Fatalf("deploy must set start-first order")
+	}
+}
+
 // TestServiceRollback: rollback уходит в Docker с флагом previous.
 func TestServiceRollback(t *testing.T) {
 	fd := clusterWithServices()
@@ -89,6 +117,38 @@ func TestServiceRollback(t *testing.T) {
 	last := fd.updates[len(fd.updates)-1]
 	if last.Rollback != "previous" {
 		t.Fatalf("rollback flag: want previous, got %q", last.Rollback)
+	}
+}
+
+// TestStackDeploy: deploy стека катит только его сервисы, сбрасывает digest,
+// ставит start-first и бампает ForceUpdate; чужой сервис не трогает (FR-08).
+func TestStackDeploy(t *testing.T) {
+	fd := clusterWithServices()
+	fd.services[0].Spec.TaskTemplate.ContainerSpec.Image = "nginx:1.27@sha256:aa"
+	srv, _ := newTestServer(t, fd)
+	client, csrf := loginClient(t, srv)
+
+	resp := postJSON(t, client, srv.URL+"/api/v1/stacks/app/deploy", nil,
+		map[string]string{"X-CSRF-Token": csrf})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("stack deploy: got %d", resp.StatusCode)
+	}
+	// Оба сервиса стека app обновлены.
+	for _, i := range []int{0, 1} {
+		sp := fd.services[i].Spec
+		if sp.TaskTemplate.ForceUpdate != 1 {
+			t.Fatalf("service %d: ForceUpdate must be 1", i)
+		}
+		if sp.UpdateConfig == nil || sp.UpdateConfig.Order != swarm.UpdateOrderStartFirst {
+			t.Fatalf("service %d: must set start-first", i)
+		}
+	}
+	if got := fd.services[0].Spec.TaskTemplate.ContainerSpec.Image; got != "nginx:1.27" {
+		t.Fatalf("digest must be stripped: %q", got)
+	}
+	// Сервис вне стека не тронут.
+	if fd.services[2].Spec.TaskTemplate.ForceUpdate != 0 {
+		t.Fatal("stack deploy must not touch services outside the stack")
 	}
 }
 

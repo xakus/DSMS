@@ -102,6 +102,11 @@ func (f *fakeDocker) ServiceUpdate(ctx context.Context, id string, version swarm
 	return nil, errors.New("no such service")
 }
 
+func (f *fakeDocker) ServiceDeploy(ctx context.Context, id string, version swarm.Version,
+	spec swarm.ServiceSpec, registryAuth string) ([]string, error) {
+	return f.ServiceUpdate(ctx, id, version, spec, registryAuth, "")
+}
+
 func (f *fakeDocker) ServiceRemove(ctx context.Context, id string) error {
 	for i := range f.services {
 		if f.services[i].ID == id {

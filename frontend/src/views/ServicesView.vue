@@ -12,6 +12,7 @@ import type { DataTableColumns } from 'naive-ui'
 import {
   PlayOutline, PauseOutline, RefreshOutline, ResizeOutline,
   PricetagOutline, ArrowUndoOutline, TrashOutline, DocumentTextOutline,
+  CloudDownloadOutline,
 } from '@vicons/ionicons5'
 import { onBeforeUnmount, onMounted } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
@@ -97,6 +98,18 @@ function redeploy(svc: ServiceInfo) {
   })
 }
 
+// Деплой: тянет свежую версию образа по текущему тегу (в отличие от
+// redeploy, который перезапускает тот же digest) и катит без простоя.
+function deploy(svc: ServiceInfo) {
+  dialog.info({
+    title: t('services.deployConfirm', { name: svc.name }),
+    content: t('services.deployHint'),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: () => run(() => api(`/services/${svc.id}/deploy`, { method: 'POST' })),
+  })
+}
+
 function openScale(svc: ServiceInfo) {
   scaleTarget.value = svc
   scaleValue.value = svc.desired
@@ -162,12 +175,13 @@ const columns = computed<DataTableColumns<ServiceInfo>>(() => [
   },
   { title: t('services.ports'), key: 'ports', render: (row) => (row.ports ?? []).join(', ') || '—' },
   {
-    title: t('services.actions'), key: 'actions', width: 280,
+    title: t('services.actions'), key: 'actions', width: 320,
     render: (row) =>
       rowActions([
         row.stopped
           ? { icon: PlayOutline, tip: t('services.startTip'), type: 'success', onClick: () => start(row) }
           : { icon: PauseOutline, tip: t('services.stopTip'), type: 'warning', disabled: row.mode === 'global', onClick: () => stop(row) },
+        { icon: CloudDownloadOutline, tip: t('services.deployTip'), type: 'primary', onClick: () => deploy(row) },
         { icon: RefreshOutline, tip: t('services.redeployTip'), onClick: () => redeploy(row) },
         { icon: ResizeOutline, tip: t('services.scaleTip'), disabled: row.mode === 'global', onClick: () => openScale(row) },
         { icon: PricetagOutline, tip: t('services.imageTip'), onClick: () => openImage(row) },

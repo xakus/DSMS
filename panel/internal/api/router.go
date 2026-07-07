@@ -40,6 +40,8 @@ type DockerAPI interface {
 	ServiceInspect(ctx context.Context, id string) (swarm.Service, error)
 	ServiceUpdate(ctx context.Context, id string, version swarm.Version,
 		spec swarm.ServiceSpec, registryAuth, rollback string) ([]string, error)
+	ServiceDeploy(ctx context.Context, id string, version swarm.Version,
+		spec swarm.ServiceSpec, registryAuth string) ([]string, error)
 	ServiceRemove(ctx context.Context, id string) error
 	ServiceTasks(ctx context.Context, serviceID string) ([]swarm.Task, error)
 	Tasks(ctx context.Context) ([]swarm.Task, error)
@@ -121,6 +123,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/services/{id}/scale", h.serviceScale)
 			r.Post("/services/{id}/start", h.serviceStart)
 			r.Post("/services/{id}/redeploy", h.serviceRedeploy)
+			r.Post("/services/{id}/deploy", h.serviceDeploy)
 			r.Post("/services/{id}/image", h.serviceImage)
 			r.Post("/services/{id}/rollback", h.serviceRollback)
 			r.Delete("/services/{id}", h.serviceRemove)
@@ -129,6 +132,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/stacks", h.stacks)
 			r.Get("/stacks/{name}", h.stackDetail)
 			r.Post("/stacks/{name}/redeploy", h.stackRedeploy)
+			r.Post("/stacks/{name}/deploy", h.stackDeploy)
 			r.Delete("/stacks/{name}", h.stackRemove)
 
 			// --- журнал действий (FR-06) ---

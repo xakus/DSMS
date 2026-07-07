@@ -102,6 +102,40 @@ func (h *handlers) stackRedeploy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"status": "ok", "services": len(services)})
 }
 
+// stackDeploy — POST /stacks/{name}/deploy: каждому сервису стека тянет
+// свежий образ по тегу и катит без простоя (start-first). Отличие от
+// stackRedeploy: сбрасывается pinned digest, Swarm заново резолвит теги.
+func (h *handlers) stackDeploy(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	services, err := h.stackServices(r, name)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "docker api error")
+		return
+	}
+	if len(services) == 0 {
+		writeErr(w, http.StatusNotFound, "stack not found")
+		return
+	}
+	failed := 0
+	for _, sv := range services {
+		svc, err := h.Docker.ServiceInspect(r.Context(), sv.ID)
+		if err != nil {
+			failed++
+			continue
+		}
+		if err := h.deployService(r, svc, ""); err != nil {
+			failed++
+		}
+	}
+	s := sessionFrom(r)
+	_ = h.Store.AppendAudit(s.UserID, "stack.deploy", "stack", name, "")
+	if failed > 0 {
+		writeErr(w, http.StatusBadGateway, "some services failed to deploy")
+		return
+	}
+	writeJSON(w, map[string]any{"status": "ok", "services": len(services)})
+}
+
 // stackRemove — DELETE /stacks/{name}: удаление всех сервисов стека (3.8.3).
 // Двойное подтверждение с вводом имени — на стороне UI.
 func (h *handlers) stackRemove(w http.ResponseWriter, r *http.Request) {
