@@ -51,6 +51,50 @@ func (s *Store) CleanupMetrics(cutoff int64) error {
 	return err
 }
 
+// LiveRow — сырая строка metrics_live (JSON снапшота) для прогрева буфера.
+// store не импортирует пакет metrics — десериализация на стороне вызывающего.
+type LiveRow struct {
+	NodeID   string
+	TS       int64
+	Snapshot []byte
+}
+
+// InsertMetricsLive пишет живую точку ноды (шаг 3с, idempotent по PK node_id+ts).
+// snapshot — JSON снапшота метрик.
+func (s *Store) InsertMetricsLive(nodeID string, ts int64, snapshot []byte) error {
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO metrics_live (node_id, ts, snapshot)
+		 VALUES (?, ?, ?)`, nodeID, ts, snapshot)
+	return err
+}
+
+// RecentMetricsLive возвращает все живые точки с ts >= cutoff, старые первыми —
+// для прогрева кольцевого буфера при старте панели.
+func (s *Store) RecentMetricsLive(cutoff int64) ([]LiveRow, error) {
+	rows, err := s.db.Query(
+		`SELECT node_id, ts, snapshot FROM metrics_live
+		 WHERE ts >= ? ORDER BY ts`, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []LiveRow{}
+	for rows.Next() {
+		var r LiveRow
+		if err := rows.Scan(&r.NodeID, &r.TS, &r.Snapshot); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// CleanupMetricsLive удаляет живые точки старше cutoff (короткая ретенция ~20 мин).
+func (s *Store) CleanupMetricsLive(cutoff int64) error {
+	_, err := s.db.Exec(`DELETE FROM metrics_live WHERE ts < ?`, cutoff)
+	return err
+}
+
 // Vacuum сжимает файл БД (разд. 10 ТЗ: рост SQLite).
 func (s *Store) Vacuum() error {
 	_, err := s.db.Exec(`VACUUM`)

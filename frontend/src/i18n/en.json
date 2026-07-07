@@ -133,7 +133,7 @@
     "interface": "Interface",
     "refreshInterval": "Charts refresh interval",
     "sec": "sec",
-    "refreshHint": "How often live metric charts redraw (0.5–30 s). Note: agents send metrics every ~3 s, so faster than that shows the same values. Saved in this browser.",
+    "refreshHint": "How often agents collect and send metrics (1–30 s). This is a server setting — each agent picks it up within ~10 s. Controls the update rate of all live charts.",
     "monitoring": "Monitoring",
     "diskThreshold": "Disk usage alert, %",
     "retention": "Keep metrics history",

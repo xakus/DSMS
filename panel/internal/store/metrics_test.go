@@ -63,6 +63,57 @@ func TestMetricsRoundtrip(t *testing.T) {
 	}
 }
 
+// TestMetricsLiveRoundtrip: insert → recent (фильтр по cutoff) → cleanup.
+func TestMetricsLiveRoundtrip(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now().Unix()
+
+	// 2 свежие точки (в окне) + 1 старая (30 мин назад)
+	old := now - 30*60
+	for _, tc := range []struct {
+		ts   int64
+		json string
+	}{
+		{now - 6, `{"node_id":"n1","ts":1}`},
+		{now - 3, `{"node_id":"n1","ts":2}`},
+		{old, `{"node_id":"n1","ts":3}`},
+	} {
+		if err := s.InsertMetricsLive("n1", tc.ts, []byte(tc.json)); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+
+	// recent за последние 20 мин — 2 точки, по возрастанию ts
+	rows, err := s.RecentMetricsLive(now - 20*60)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("recent: %v, %d rows", err, len(rows))
+	}
+	if rows[0].TS > rows[1].TS {
+		t.Fatal("rows must be ordered by ts")
+	}
+	if string(rows[0].Snapshot) != `{"node_id":"n1","ts":1}` {
+		t.Fatalf("snapshot content: %s", rows[0].Snapshot)
+	}
+
+	// idempotent по PK (node_id, ts)
+	if err := s.InsertMetricsLive("n1", now-3, []byte(`{"x":1}`)); err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	rows, _ = s.RecentMetricsLive(now - 20*60)
+	if len(rows) != 2 {
+		t.Fatalf("replace must not duplicate: %d", len(rows))
+	}
+
+	// cleanup удаляет старую точку (за пределами 20 мин)
+	if err := s.CleanupMetricsLive(now - 20*60); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	all, _ := s.RecentMetricsLive(0)
+	if len(all) != 2 {
+		t.Fatalf("after cleanup: want 2 rows, got %d", len(all))
+	}
+}
+
 // TestSettingsRoundtrip: set → get → overwrite.
 func TestSettingsRoundtrip(t *testing.T) {
 	s := newTestStore(t)

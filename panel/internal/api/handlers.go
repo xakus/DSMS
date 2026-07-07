@@ -154,6 +154,13 @@ func (h *handlers) ingest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Buffer.Put(snap)
+	// Персист живой точки в SQLite — чтобы 15м-график пережил рестарт панели.
+	// Ошибка не критична для приёма: логируем и продолжаем.
+	if raw, err := json.Marshal(snap); err == nil {
+		if err := h.Store.InsertMetricsLive(snap.NodeID, snap.TS, raw); err != nil {
+			slog.Warn("persist live metric failed", "node", snap.NodeID, "err", err)
+		}
+	}
 	// Запомнить адрес агента ноды — для команд df/volumes/prune (FR-10, FR-11).
 	if h.Agents != nil {
 		h.Agents.Set(snap.NodeID, ipFromRemoteAddr(r.RemoteAddr))
@@ -170,6 +177,18 @@ func (h *handlers) ingest(w http.ResponseWriter, r *http.Request) {
 		"data":  snap,
 	})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// agentConfig — GET /api/v1/agent/config: агент периодически тянет период
+// отдачи метрик. Авторизация тем же X-Agent-Token, что и ingest.
+func (h *handlers) agentConfig(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("X-Agent-Token")
+	if h.Cfg.AgentToken == "" ||
+		subtle.ConstantTimeCompare([]byte(token), []byte(h.Cfg.AgentToken)) != 1 {
+		writeErr(w, http.StatusUnauthorized, "invalid agent token")
+		return
+	}
+	writeJSON(w, map[string]any{"interval_sec": h.metricsIntervalSec()})
 }
 
 // cluster — сводка кластера (FR-01 3.1.3): ноды, сервисы, статусы.

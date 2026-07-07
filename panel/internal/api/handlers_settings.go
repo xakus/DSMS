@@ -13,9 +13,13 @@ import (
 
 // Ключи настроек в таблице settings.
 const (
-	settingAlertDiskPct  = "alert.disk_pct"         // порог диска (FR-12)
-	settingRetentionDays = "metrics.retention_days" // ретенция истории метрик (разд. 5)
-	defaultRetentionDays = 7
+	settingAlertDiskPct       = "alert.disk_pct"         // порог диска (FR-12)
+	settingRetentionDays      = "metrics.retention_days" // ретенция истории метрик (разд. 5)
+	settingMetricsIntervalSec = "metrics.interval_sec"   // период отдачи метрик агентами
+	defaultRetentionDays      = 7
+	defaultMetricsIntervalSec = 3 // как в ТЗ (агент шлёт раз в 3с)
+	minMetricsIntervalSec     = 1
+	maxMetricsIntervalSec     = 30
 )
 
 // changePassword — POST /settings/password {old, new} (6.2 экран 12).
@@ -53,6 +57,25 @@ func (h *handlers) changePassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "ok"})
 }
 
+// metricsIntervalSec возвращает период отдачи метрик (сек) из настроек,
+// с клампом в допустимый диапазон и дефолтом. Используется в getSettings
+// и в agentConfig (эндпоинт для агентов).
+func (h *handlers) metricsIntervalSec() int {
+	sec := defaultMetricsIntervalSec
+	if v, _ := h.Store.GetSetting(settingMetricsIntervalSec); v != "" {
+		if d, err := strconv.Atoi(v); err == nil {
+			sec = d
+		}
+	}
+	if sec < minMetricsIntervalSec {
+		sec = minMetricsIntervalSec
+	}
+	if sec > maxMetricsIntervalSec {
+		sec = maxMetricsIntervalSec
+	}
+	return sec
+}
+
 // getSettings — GET /settings: текущие настройки панели.
 func (h *handlers) getSettings(w http.ResponseWriter, r *http.Request) {
 	diskPct := 90.0
@@ -70,6 +93,7 @@ func (h *handlers) getSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"alert_disk_pct":         diskPct,
 		"metrics_retention_days": retention,
+		"metrics_interval_sec":   h.metricsIntervalSec(),
 	})
 }
 
@@ -79,6 +103,7 @@ func (h *handlers) putSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		AlertDiskPct  float64 `json:"alert_disk_pct"`
 		RetentionDays int     `json:"metrics_retention_days"`
+		IntervalSec   int     `json:"metrics_interval_sec"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil ||
 		req.AlertDiskPct < 50 || req.AlertDiskPct > 99 {
@@ -89,12 +114,20 @@ func (h *handlers) putSettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "metrics_retention_days must be 1..90")
 		return
 	}
+	if req.IntervalSec < minMetricsIntervalSec || req.IntervalSec > maxMetricsIntervalSec {
+		writeErr(w, http.StatusBadRequest, "metrics_interval_sec must be 1..30")
+		return
+	}
 	if err := h.Store.SetSetting(settingAlertDiskPct,
 		strconv.FormatFloat(req.AlertDiskPct, 'f', 1, 64)); err != nil {
 		writeErr(w, http.StatusInternalServerError, "storage error")
 		return
 	}
 	if err := h.Store.SetSetting(settingRetentionDays, strconv.Itoa(req.RetentionDays)); err != nil {
+		writeErr(w, http.StatusInternalServerError, "storage error")
+		return
+	}
+	if err := h.Store.SetSetting(settingMetricsIntervalSec, strconv.Itoa(req.IntervalSec)); err != nil {
 		writeErr(w, http.StatusInternalServerError, "storage error")
 		return
 	}

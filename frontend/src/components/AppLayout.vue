@@ -18,6 +18,7 @@ import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { useMetricsStore } from '../stores/metrics'
 import { useAlertsStore } from '../stores/alerts'
+import { useUiStore } from '../stores/ui'
 import { wsClient } from '../api/ws'
 
 const route = useRoute()
@@ -28,9 +29,12 @@ const auth = useAuthStore()
 const theme = useThemeStore()
 const metrics = useMetricsStore()
 const alerts = useAlertsStore()
+const ui = useUiStore()
 
 // Колокольчик (3.12.2): подписка на алерты + тосты на новые.
 onMounted(() => {
+  // Синхронизировать интервал графиков с серверной настройкой (её видят агенты).
+  ui.loadFromServer()
   alerts.load().catch(() => {})
   alerts.start((a) => {
     const text = `${a.rule}: ${a.message}`

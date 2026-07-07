@@ -75,6 +75,15 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- Живые метрики (шаг 3с): чтобы 15м-график переживал рестарт панели.
+-- Ретенция короткая (~20 мин), фоновая очистка в history-агрегаторе.
+CREATE TABLE IF NOT EXISTS metrics_live (
+    node_id  TEXT    NOT NULL,
+    ts       INTEGER NOT NULL,
+    snapshot BLOB    NOT NULL,
+    PRIMARY KEY (node_id, ts)
+);
 `
 
 // Store — обёртка над *sql.DB с методами доменного уровня.

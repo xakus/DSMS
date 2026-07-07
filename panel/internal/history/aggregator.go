@@ -19,6 +19,10 @@ const (
 	aggregateEvery = time.Minute
 	vacuumEvery    = 24 * time.Hour
 
+	// liveRetention — срок хранения живых точек (metrics_live). Чуть больше
+	// окна 15м, чтобы прогрев буфера при старте давал полное окно.
+	liveRetention = 20 * time.Minute
+
 	// SettingRetentionDays — ключ настройки ретенции (Settings, экран 12).
 	SettingRetentionDays = "metrics.retention_days"
 	defaultRetentionDays = 7 // ретенция metrics_1m по умолчанию (разд. 5 ТЗ)
@@ -73,6 +77,11 @@ func (a *Aggregator) Run(ctx context.Context) {
 			cutoff := time.Now().AddDate(0, 0, -a.retentionDays()).Unix()
 			if err := a.store.CleanupMetrics(cutoff); err != nil {
 				slog.Warn("metrics cleanup failed", "err", err)
+			}
+			// Живые точки хранятся коротко (~20 мин) — только для прогрева.
+			liveCutoff := time.Now().Add(-liveRetention).Unix()
+			if err := a.store.CleanupMetricsLive(liveCutoff); err != nil {
+				slog.Warn("live metrics cleanup failed", "err", err)
 			}
 		case <-vac.C:
 			if err := a.store.Vacuum(); err != nil {

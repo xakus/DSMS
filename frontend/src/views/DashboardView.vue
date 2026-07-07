@@ -12,7 +12,7 @@ import AppLayout from '../components/AppLayout.vue'
 import NodeCard from '../components/NodeCard.vue'
 import { api } from '../api/client'
 import { useMetricsStore } from '../stores/metrics'
-import type { ClusterSummary, JoinTokens, NodeInfo } from '../types'
+import type { ClusterSummary, JoinTokens, NodeInfo, Snapshot } from '../types'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -24,6 +24,22 @@ const nodes = ref<NodeInfo[]>([])
 const showAddNode = ref(false)
 const tokens = ref<JoinTokens | null>(null)
 
+// Ноды, для которых окно графиков уже подтянуто из истории (один раз на ноду).
+const preloaded = new Set<string>()
+
+/** Подтянуть окно истории (последние 15 мин из буфера panel) один раз на ноду,
+ *  чтобы спарклайны рисовались от истории, а не наполнялись с нуля по WS. */
+async function preloadWindow(nodeId: string) {
+  if (preloaded.has(nodeId)) return
+  preloaded.add(nodeId)
+  try {
+    const win = await api<Snapshot[]>(`/metrics/nodes/${nodeId}`)
+    if (win?.length) metrics.preload(nodeId, win)
+  } catch {
+    preloaded.delete(nodeId) // повторить на следующем refresh
+  }
+}
+
 /** Обновить сводку и список нод. */
 async function refresh() {
   try {
@@ -34,6 +50,8 @@ async function refresh() {
     // Затравка метрик из REST-ответа, дальше — живые по WS.
     for (const n of nodes.value) {
       if (n.metrics) metrics.seed(n.id, n.metrics)
+      // История окна для графиков — один раз на ноду (в т.ч. для добавленных позже).
+      preloadWindow(n.id)
     }
   } catch {
     message.error(t('common.loadFailed'))

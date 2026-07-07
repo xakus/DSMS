@@ -76,6 +76,8 @@ func main() {
 
 	// Кольцевой буфер live-метрик: 15 минут при шаге 3с (разд. 2.2 ТЗ).
 	buf := metrics.NewClusterBuffer(15*time.Minute, 3*time.Second)
+	// Прогрев буфера из SQLite — 15м-график переживает рестарт панели.
+	history.WarmBuffer(db, buf, 15*time.Minute)
 
 	// WebSocket-hub: рассылка метрик/логов/событий/алертов подписчикам.
 	hub := ws.NewHub()

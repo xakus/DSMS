@@ -95,6 +95,8 @@ func NewRouter(d Deps) http.Handler {
 		r.Post("/setup", h.setup)
 		// приём метрик от агентов — авторизация по X-Agent-Token (3.7.4)
 		r.Post("/ingest", h.ingest)
+		// конфиг для агентов (период отдачи метрик) — тот же X-Agent-Token
+		r.Get("/agent/config", h.agentConfig)
 
 		// --- под сессией ---
 		r.Group(func(r chi.Router) {

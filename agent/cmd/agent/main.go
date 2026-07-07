@@ -16,6 +16,7 @@ import (
 	"github.com/xakus/DSMS/agent/internal/collector"
 	"github.com/xakus/DSMS/agent/internal/config"
 	"github.com/xakus/DSMS/agent/internal/dockerops"
+	"github.com/xakus/DSMS/agent/internal/remotecfg"
 	"github.com/xakus/DSMS/agent/internal/sender"
 	"github.com/xakus/DSMS/agent/internal/server"
 )
@@ -46,27 +47,33 @@ func main() {
 	snd := sender.New(cfg)
 	go snd.Run(ctx) // отправка с буферизацией — в своей горутине
 
+	// Период отдачи метрик управляется из UI: поллер раз в 10с тянет его с панели.
+	poller := remotecfg.New(cfg)
+	go poller.Run(ctx)
+
 	// Локальный HTTP API для панели (df/volumes/prune, разд. 2.3).
 	go server.New(cfg, ops).Run(ctx)
 
 	slog.Info("agent started",
-		"node_id", cfg.NodeID, "panel", cfg.PanelURL, "interval", cfg.Interval.String())
+		"node_id", cfg.NodeID, "panel", cfg.PanelURL, "interval", poller.Interval().String())
 
-	// Основной цикл сбора: тик каждые cfg.Interval (по умолчанию 3с).
-	ticker := time.NewTicker(cfg.Interval)
-	defer ticker.Stop()
+	// Основной цикл сбора: период динамический (poller.Interval()) — смена
+	// интервала в Settings применяется со следующей итерации.
+	timer := time.NewTimer(poller.Interval())
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			slog.Info("agent stopped")
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			snap, err := col.Collect(ctx)
 			if err != nil {
 				slog.Warn("collect failed", "err", err)
-				continue
+			} else {
+				snd.Enqueue(snap)
 			}
-			snd.Enqueue(snap)
+			timer.Reset(poller.Interval())
 		}
 	}
 }

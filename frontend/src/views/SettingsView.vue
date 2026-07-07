@@ -28,18 +28,23 @@ const pwForm = ref({ old: '', new: '' })
 const diskPct = ref(90)
 const retentionDays = ref(7)
 
-// Интервал обновления (локальная UI-настройка), в секундах для удобства.
-const refreshSec = computed({
-  get: () => ui.refreshMs / 1000,
-  set: (s: number) => ui.setRefreshMs(Math.round(s * 1000)),
-})
+// Интервал отдачи метрик (серверная настройка): агенты тянут его раз в 10с
+// и шлют данные с этим периодом. В секундах для удобства.
+const intervalSec = ref(3)
 
 /** Загрузить настройки панели. */
 async function loadSettings() {
   try {
-    const s = await api<{ alert_disk_pct: number; metrics_retention_days: number }>('/settings')
+    const s = await api<{
+      alert_disk_pct: number
+      metrics_retention_days: number
+      metrics_interval_sec: number
+    }>('/settings')
     diskPct.value = s.alert_disk_pct
     retentionDays.value = s.metrics_retention_days
+    intervalSec.value = s.metrics_interval_sec
+    // Синхронизируем локальную частоту перерисовки графиков.
+    ui.setRefreshMs(s.metrics_interval_sec * 1000)
   } catch { /* настройки недоступны — оставляем дефолт */ }
 }
 
@@ -55,13 +60,19 @@ async function changePassword() {
   }
 }
 
-/** Сохранить пороги и ретенцию (применяются сразу, без рестарта). */
+/** Сохранить пороги, ретенцию и интервал метрик (применяются сразу, без рестарта).
+ *  Новый интервал агенты подхватят в течение ~10с (их поллер конфига). */
 async function saveThreshold() {
   try {
     await api('/settings', {
       method: 'PUT',
-      body: { alert_disk_pct: diskPct.value, metrics_retention_days: retentionDays.value },
+      body: {
+        alert_disk_pct: diskPct.value,
+        metrics_retention_days: retentionDays.value,
+        metrics_interval_sec: intervalSec.value,
+      },
     })
+    ui.setRefreshMs(intervalSec.value * 1000) // локальная перерисовка — сразу
     message.success('OK')
   } catch (e) {
     message.error(e instanceof ApiError ? e.message : 'error')
@@ -159,23 +170,17 @@ const columns = computed<DataTableColumns<RegistryInfo>>(() => [
               </n-form>
             </n-card>
 
-            <!-- Интерфейс: интервал обновления (локально в браузере, сразу) -->
-            <n-card :title="t('settings.interface')" size="small">
+            <!-- Мониторинг: интервал метрик + пороги алертов + ретенция (на лету) -->
+            <n-card :title="t('settings.monitoring')" size="small">
               <n-form label-placement="top">
                 <n-form-item :label="t('settings.refreshInterval')">
                   <n-space vertical style="width: 100%">
-                    <n-input-number v-model:value="refreshSec" :min="0.5" :max="30" :step="0.5" class="num">
+                    <n-input-number v-model:value="intervalSec" :min="1" :max="30" :step="1" class="num">
                       <template #suffix>{{ t('settings.sec') }}</template>
                     </n-input-number>
                     <span class="hint">{{ t('settings.refreshHint') }}</span>
                   </n-space>
                 </n-form-item>
-              </n-form>
-            </n-card>
-
-            <!-- Мониторинг: пороги алертов + ретенция истории (применяется на лету) -->
-            <n-card :title="t('settings.monitoring')" size="small">
-              <n-form label-placement="top">
                 <n-form-item :label="t('settings.diskThreshold')">
                   <n-input-number v-model:value="diskPct" :min="50" :max="99" class="num" />
                 </n-form-item>
