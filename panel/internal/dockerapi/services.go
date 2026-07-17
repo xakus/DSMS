@@ -30,9 +30,9 @@ func (cl *Client) ServiceUpdate(ctx context.Context, id string, version swarm.Ve
 // ServiceDeploy тянет свежую версию образа по тегу и катит обновление.
 // В отличие от ServiceUpdate (redeploy = ForceUpdate++, тот же digest),
 // QueryRegistry=true заставляет Swarm заново разрезолвить тег образа в
-// реестре — аналог `docker service update --image repo:tag`. Старые
-// задачи заменяются согласно UpdateConfig сервиса (start-first — новый
-// поднимается раньше, чем убивается старый).
+// реестре — аналог `docker service update --image repo:tag`. Старые задачи
+// заменяются согласно UpdateConfig сервиса (order/parallelism из compose;
+// панель его не переопределяет).
 func (cl *Client) ServiceDeploy(ctx context.Context, id string, version swarm.Version,
 	spec swarm.ServiceSpec, registryAuth string) ([]string, error) {
 	resp, err := cl.c.ServiceUpdate(ctx, id, version, spec, swarm.ServiceUpdateOptions{

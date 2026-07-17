@@ -144,14 +144,25 @@ const theme = useThemeStore()
   font-size: 18px;
 }
 
-/* Убираем цветной фон автозаполнения Chrome в полях ввода. */
+/* Автозаполнение Chrome: убираем жёлтый фон и задаём цвет текста ЯВНО по теме.
+   Раньше использовался currentColor — но для :-webkit-autofill Chrome вычисляет
+   его до применения тёмной темы Naive, и текст оставался чёрным на тёмном фоне
+   (нечитаемо). Явные цвета надёжнее. */
 :deep(input:-webkit-autofill),
 :deep(input:-webkit-autofill:hover),
-:deep(input:-webkit-autofill:focus) {
+:deep(input:-webkit-autofill:focus),
+:deep(input:-webkit-autofill:active) {
   -webkit-box-shadow: 0 0 0 1000px transparent inset;
   transition: background-color 9999s ease-in-out 0s;
-  -webkit-text-fill-color: currentColor;
-  caret-color: currentColor;
+  -webkit-text-fill-color: #171a21;
+  caret-color: #171a21;
+}
+.auth-page.dark :deep(input:-webkit-autofill),
+.auth-page.dark :deep(input:-webkit-autofill:hover),
+.auth-page.dark :deep(input:-webkit-autofill:focus),
+.auth-page.dark :deep(input:-webkit-autofill:active) {
+  -webkit-text-fill-color: #e7e8ec;
+  caret-color: #e7e8ec;
 }
 
 /* --- Логотип и заголовок --- */

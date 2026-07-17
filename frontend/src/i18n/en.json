@@ -108,7 +108,8 @@
     "stopConfirm": "Stop service {name}? (scale to 0, replicas will be remembered)",
     "redeployConfirm": "Force redeploy {name}?",
     "deployConfirm": "Deploy {name}?",
-    "deployHint": "The panel will re-pull the latest image for the current tag and replace old containers with new ones with no downtime (old is removed after the new one is up).",
+    "deployHint": "The panel will re-pull the latest image for the current tag and roll the service using its stack's update policy (order/parallelism).",
+    "deployStarted": "Deploy started — updating in the background",
     "rollbackConfirm": "Rollback {name} to previous spec?",
     "removeTitle": "Remove service",
     "removeHint": "Type the service name «{name}» to confirm removal."
@@ -120,7 +121,8 @@
     "redeployTip": "Redeploy stack",
     "redeployConfirm": "Force redeploy all services of stack {name}?",
     "deployConfirm": "Deploy stack {name}?",
-    "deployHint": "For each service in the stack the panel will re-pull the latest image for the current tag and replace containers with no downtime.",
+    "deployHint": "For each service in the stack the panel will re-pull the latest image for the current tag. The rollout follows the stack's compose update policy and may take a while.",
+    "deployStarted": "Stack deploy started — updating in the background",
     "removeTitle": "Remove stack",
     "removeHint": "This removes all {count} services of the stack. Type «{name}» to confirm."
   },

@@ -99,14 +99,20 @@ function redeploy(svc: ServiceInfo) {
 }
 
 // Деплой: тянет свежую версию образа по текущему тегу (в отличие от
-// redeploy, который перезапускает тот же digest) и катит без простоя.
+// redeploy, который перезапускает тот же digest). Обновление на бэке может
+// идти не мгновенно, поэтому окно НЕ держим в loading — закрываем сразу
+// (onPositiveClick не возвращает Promise), а прогресс показываем тостом.
+// Иначе окно «висит», юзер жмёт повторно и плодит лишние задачи.
 function deploy(svc: ServiceInfo) {
   dialog.info({
     title: t('services.deployConfirm', { name: svc.name }),
     content: t('services.deployHint'),
     positiveText: t('common.confirm'),
     negativeText: t('common.cancel'),
-    onPositiveClick: () => run(() => api(`/services/${svc.id}/deploy`, { method: 'POST' })),
+    onPositiveClick: () => {
+      message.info(t('services.deployStarted'))
+      run(() => api(`/services/${svc.id}/deploy`, { method: 'POST' }))
+    },
   })
 }
 

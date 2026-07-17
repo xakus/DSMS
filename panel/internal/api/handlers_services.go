@@ -316,11 +316,11 @@ func (h *handlers) forceUpdate(r *http.Request, id string) error {
 }
 
 // serviceDeploy — POST /services/{id}/deploy {registry_id?}: тянет свежую
-// версию образа по текущему тегу и катит zero-downtime обновление.
+// версию образа по текущему тегу и катит обновление по правилам стека.
 // Отличие от redeploy: сбрасывается pinned digest и включается QueryRegistry,
 // поэтому Swarm заново резолвит тег в реестре (аналог
-// `docker service update --image repo:tag`). Порядок — start-first: новая
-// задача поднимается раньше, чем убивается старая.
+// `docker service update --image repo:tag`). Порядок отката задач берётся из
+// UpdateConfig сервиса (compose), панель его не переопределяет.
 func (h *handlers) serviceDeploy(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	// registry_id опционален — для приватных реестров (FR-13).
@@ -355,19 +355,20 @@ func (h *handlers) serviceDeploy(w http.ResponseWriter, r *http.Request) {
 }
 
 // deployService катит один сервис на свежий образ: сбрасывает pinned
-// digest, форсит перекат и включает start-first. Переиспользуется
-// serviceDeploy и stackDeploy (FR-08).
+// digest и форсит перекат. Переиспользуется serviceDeploy и stackDeploy (FR-08).
+//
+// ВАЖНО: UpdateConfig (order/parallelism) НЕ трогаем — уважаем то, что задано
+// в стеке/compose. Раньше здесь навязывался start-first, и это приводило к
+// накоплению задач: на нодах с нехваткой памяти новая реплика не поднималась
+// («insufficient resources»), update зависал в состоянии updating, старая
+// задача не убивалась, а каждый повторный деплой добавлял ещё одну задачу
+// (реплики росли как 8/1, 4/1). Поведение = `docker service update --image`.
 func (h *handlers) deployService(r *http.Request, svc swarm.Service, regAuth string) error {
 	spec := svc.Spec
 	// Отрезаем @sha256:... — иначе Swarm дёрнет тот же самый образ.
 	spec.TaskTemplate.ContainerSpec.Image = shortImage(spec.TaskTemplate.ContainerSpec.Image)
 	// Форсим перекат, даже если digest не изменился.
 	spec.TaskTemplate.ForceUpdate++
-	// start-first: старую задачу убиваем только после подъёма новой.
-	if spec.UpdateConfig == nil {
-		spec.UpdateConfig = &swarm.UpdateConfig{}
-	}
-	spec.UpdateConfig.Order = swarm.UpdateOrderStartFirst
 
 	_, err := h.Docker.ServiceDeploy(r.Context(), svc.ID, svc.Version, spec, regAuth)
 	return err

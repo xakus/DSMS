@@ -103,8 +103,8 @@ func (h *handlers) stackRedeploy(w http.ResponseWriter, r *http.Request) {
 }
 
 // stackDeploy — POST /stacks/{name}/deploy: каждому сервису стека тянет
-// свежий образ по тегу и катит без простоя (start-first). Отличие от
-// stackRedeploy: сбрасывается pinned digest, Swarm заново резолвит теги.
+// свежий образ по тегу. Отличие от stackRedeploy: сбрасывается pinned digest,
+// Swarm заново резолвит теги. Порядок отката — из UpdateConfig стека.
 func (h *handlers) stackDeploy(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	services, err := h.stackServices(r, name)

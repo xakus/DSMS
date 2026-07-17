@@ -61,23 +61,31 @@ function redeploy(stack: StackInfo) {
 }
 
 // Деплой всего стека: каждому сервису тянет свежий образ по тегу (в отличие
-// от redeploy, который перезапускает те же digest'ы) и катит без простоя.
+// от redeploy, который перезапускает те же digest'ы). Деплой стека на бэке —
+// длинная последовательная операция, поэтому окно НЕ держим в loading:
+// закрываем сразу (onPositiveClick без Promise), прогресс — тостом. Иначе
+// окно «висит», юзер жмёт повторно и плодит лишние задачи на каждом сервисе.
 function deploy(stack: StackInfo) {
   dialog.info({
     title: t('stacks.deployConfirm', { name: stack.name }),
     content: t('stacks.deployHint'),
     positiveText: t('common.confirm'),
     negativeText: t('common.cancel'),
-    onPositiveClick: async () => {
-      try {
-        await api(`/stacks/${stack.name}/deploy`, { method: 'POST' })
-        message.success('OK')
-        await load()
-      } catch (e) {
-        message.error(e instanceof ApiError ? e.message : 'error')
-      }
-    },
+    onPositiveClick: () => { runDeploy(stack) },
   })
+}
+
+// Фоновый деплой стека: запускается из onPositiveClick без ожидания,
+// результат сообщается тостом, список обновляется по завершении.
+async function runDeploy(stack: StackInfo) {
+  message.info(t('stacks.deployStarted'))
+  try {
+    await api(`/stacks/${stack.name}/deploy`, { method: 'POST' })
+    message.success('OK')
+    await load()
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : 'error')
+  }
 }
 
 function openRemove(stack: StackInfo) {

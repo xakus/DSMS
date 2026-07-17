@@ -44,17 +44,17 @@ docker build -f agent/Dockerfile -t ghcr.io/xakus/dsms-agent:latest .
 
 Согласно ТЗ проект состоит из трёх независимых частей. **Каждая — в своей подпапке, без общего кода между ними** (даже ценой дублирования DTO).
 
-1. **PANEL** (backend, Go 1.23+) — размещается только на manager-ноде (`constraint: node.role == manager`, нужен доступ к `/var/run/docker.sock`).
+1. **PANEL** (backend, Go 1.25+) — размещается только на manager-ноде (`constraint: node.role == manager`, нужен доступ к `/var/run/docker.sock`).
    - REST API + WebSocket hub (префикс `/api/v1`).
    - Клиент Docker Engine API: `github.com/docker/docker/client` с **обязательным** `client.WithAPIVersionNegotiation()` (иначе несовместимость версий API — известный риск).
    - Приём метрик от агентов: `POST /api/v1/ingest`, авторизация по `X-Agent-Token` (Docker secret).
-   - Хранение метрик двухуровневое: **последние 15 мин — кольцевой буфер в памяти** (шаг 3с, в БД НЕ пишется); **1-мин агрегаты — в SQLite**, ретенция 7 дней, фоновая очистка + VACUUM.
+   - Хранение метрик трёхуровневое: **живые точки (шаг 1–30с) — кольцевой буфер в памяти И таблица `metrics_live`** (ретенция ~20 мин; при старте панели буфер восстанавливается из БД — 15-мин график переживает рестарт, см. `internal/history/warmup.go`); **1-мин агрегаты — в `metrics_1m`**, ретенция 7 дней, фоновая очистка + VACUUM (`internal/history/aggregator.go`).
    - Auth: сессии (HttpOnly/Secure/SameSite=Strict cookie, TTL 24ч), пароли bcrypt cost 12, CSRF-токены на мутирующие запросы, rate-limit на `/login`.
-   - Стек: `net/http` + `chi` router, `nhooyr.io/websocket`. Минимум зависимостей.
+   - Стек: `net/http` + `chi` router, `github.com/coder/websocket`. Минимум зависимостей.
    - Финальный образ ≤ 25 МБ (multi-stage → scratch/alpine).
 
-2. **AGENT** (Go 1.23+) — деплой `mode: global` (автоматически на каждой ноде, включая добавленные позже).
-   - Метрики через `github.com/shirou/gopsutil/v4`, интервал 3с.
+2. **AGENT** (Go 1.25+) — деплой `mode: global` (автоматически на каждой ноде, включая добавленные позже).
+   - Метрики через `github.com/shirou/gopsutil/v4`. Интервал сбора — **серверная настройка** `metrics.interval_sec` (1..30с, дефолт 3с): агент раз в 10с тянет её через `GET /api/v1/agent/config` (`internal/remotecfg`).
    - Хост монтируется read-only: `/proc→/host/proc`, `/sys→/host/sys`, `/→/host/rootfs`; env `HOST_PROC`/`HOST_SYS` для gopsutil.
    - Идентификация ноды по `NODE_ID={{.Node.ID}}` (Swarm template в env).
    - Шлёт JSON-батч на `POST http://panel:9000/api/v1/ingest`. При недоступности panel — буфер до 60с, потом дроп старых точек.
@@ -63,7 +63,8 @@ docker build -f agent/Dockerfile -t ghcr.io/xakus/dsms-agent:latest .
 3. **FRONTEND** (Vue 3 Composition API + Vite + TypeScript).
    - UI-kit **Naive UI** (тёмная тема по умолчанию, светлая переключателем).
    - Графики — **uPlot** (лёгкий, тянет живые данные).
-   - Состояние — **Pinia**. i18n — JSON-словари (EN базовый, RU; AZ добавляется тривиально).
+   - Состояние — **Pinia**. i18n — **vue-i18n** с JSON-словарями (`src/i18n/*.json`: EN базовый, RU; AZ добавляется тривиально). Иконки — `@vicons/ionicons5`.
+   - Роутинг — **vue-router**; экраны в `src/views/*.vue` (Login, Setup, Dashboard, NodeDetail, Services/ServiceDetail, Stacks, Logs, Events, Resources, DiskUsage, Alerts, Settings).
    - **Собирается в статику и встраивается в бинарник panel через `go:embed`** — один образ, один процесс. Никаких перезагрузок страницы: SPA + WebSocket.
 
 ## Поток данных
@@ -82,6 +83,9 @@ Browser (SPA) ──HTTPS(за Nginx Proxy Manager)──> PANEL <──HTTP pus
 
 - **Stop сервиса = scale 0**, но прежнее число реплик сохраняется в label панели (таблица `service_state`), чтобы Start вернул как было.
 - **Redeploy = `ForceUpdate++`** (аналог `docker service update --force`), не пересоздание. Это же применяется к «Redeploy stack» (FR-08) — force update каждому сервису стека.
+- **Deploy vs Redeploy** — разные операции: `redeploy` только форсит рестарт на текущем образе; **`deploy`** (`POST /services/{id}/deploy`, `POST /stacks/{name}/deploy`) подтягивает свежий образ по тому же тегу (обновление до latest-дайджеста). `image` (`POST /services/{id}/image`) меняет образ на указанный; `rollback` откатывает на предыдущую спецификацию сервиса.
+- **Deploy НЕ трогает `UpdateConfig` (order/parallelism) — уважает то, что задано в стеке/compose.** Урок: раньше `deployService` навязывал `Order = start-first` каждому сервису — на нодах с нехваткой памяти новая реплика не поднималась («insufficient resources»), update зависал в `updating`, старая задача не убивалась, а каждый повторный клик «Деплой» добавлял ещё задачу (реплики росли как 8/1, 4/1). Не навязывать order/parallelism. На фронте окно подтверждения деплоя закрывается сразу (fire-and-forget + тост), иначе долгий деплой держит `loading` и провоцирует повторные клики.
+- **Ноды**: помимо promote/demote/drain (`role`, `availability`) — редактирование label'ов (`PUT /nodes/{id}/labels`) и получение/ротация join-токенов кластера (`GET`/`POST /swarm/join-tokens[/rotate]`) для добавления новых нод.
 - **Защита от выстрела в ногу**: запрет demote/drain последнего manager; предупреждение при потере кворума (чётное число manager'ов); удаление ноды — только для `down`, force — с двойным подтверждением.
 - Группировка сервисов по стекам — через label `com.docker.stack.namespace` (FR-08 работает с этой же группировкой, стек — не отдельный объект Docker, а агрегация по label).
 - **Secrets неизвлекаемы** (FR-09): значение шлётся в Docker один раз при создании, обратно не читается и никогда не логируется. Configs — читаемы.
@@ -94,7 +98,7 @@ Browser (SPA) ──HTTPS(за Nginx Proxy Manager)──> PANEL <──HTTP pus
 
 ## Модель данных (SQLite)
 
-Таблицы: `users` (с полем `role`), `metrics_1m` (агрегаты 60с, PK `(node_id, ts)`), `audit` (ссылка на `user_id`), `service_state`, `registries` (`password_enc`), `alerts`, `settings`. Полные определения — раздел 5 ТЗ. Live-метрики (3с) и per-container метрики в БД не попадают — только в память. Secrets/configs/networks/volumes в SQLite **не дублируются** — читаются напрямую из Docker API.
+Таблицы (`internal/store/store.go`): `users` (с полем `role`), `metrics_1m` (агрегаты 60с, PK `(node_id, ts)`), `metrics_live` (живые точки 1–30с, ретенция ~20 мин, для warmup буфера после рестарта), `audit` (ссылка на `user_id`), `service_state`, `registries` (`password_enc`), `alerts`, `settings`. Полные определения — раздел 5 ТЗ. Per-container метрики в БД не попадают — только в память. Secrets/configs/networks/volumes в SQLite **не дублируются** — читаются напрямую из Docker API.
 
 ## Безопасность (раздел 7 ТЗ — не игнорировать)
 
