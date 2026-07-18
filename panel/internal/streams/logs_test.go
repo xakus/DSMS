@@ -33,13 +33,13 @@ func TestReadFrame(t *testing.T) {
 
 // TestParseLine: timestamp + swarm-метки → поля LogLine (3.5.2).
 func TestParseLine(t *testing.T) {
-	raw := "2026-07-05T12:00:00.123456789Z com.docker.swarm.node.id=n1,com.docker.swarm.service.id=s1,com.docker.swarm.task.id=t1 GET /health 200"
+	raw := "2026-07-05T12:00:00.123456789Z com.docker.swarm.node.id=n1,com.docker.swarm.service.id=s1,com.docker.swarm.task.id=t1,com.docker.swarm.task.name=web.3.t1 GET /health 200"
 	ll := parseLine(raw)
 	if ll.TS != "2026-07-05T12:00:00.123456789Z" {
 		t.Fatalf("ts: %q", ll.TS)
 	}
-	if ll.Task != "t1" || ll.Node != "n1" {
-		t.Fatalf("labels: task=%q node=%q", ll.Task, ll.Node)
+	if ll.Task != "t1" || ll.Node != "n1" || ll.TaskName != "web.3.t1" {
+		t.Fatalf("labels: task=%q node=%q name=%q", ll.Task, ll.Node, ll.TaskName)
 	}
 	if ll.Line != "GET /health 200" {
 		t.Fatalf("line: %q", ll.Line)

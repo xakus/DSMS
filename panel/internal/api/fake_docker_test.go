@@ -3,7 +3,10 @@ package api
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
+	"io"
+	"strings"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -19,9 +22,25 @@ type fakeDocker struct {
 	secretData []string // сырые значения secrets — для проверки утечек
 	configs    []swarm.Config
 	networks   []network.Summary
-	rotated    bool // был ли вызван RotateJoinTokens
+	rotated    bool     // был ли вызван RotateJoinTokens
 	removed    []string
 	updates    []lastUpdate // история ServiceUpdate
+	logLines   []string     // stdcopy-payload'ы для ServiceLogsSnapshot
+}
+
+// ServiceLogsSnapshot отдаёт заранее заданные строки в stdcopy-обёртке
+// (header 8 байт + payload) — как настоящий Docker log stream.
+func (f *fakeDocker) ServiceLogsSnapshot(ctx context.Context, serviceID string, tail int, until string) (io.ReadCloser, error) {
+	var buf []byte
+	for _, ln := range f.logLines {
+		payload := []byte(ln + "\n")
+		var h [8]byte
+		h[0] = 1 // stdout
+		binary.BigEndian.PutUint32(h[4:], uint32(len(payload)))
+		buf = append(buf, h[:]...)
+		buf = append(buf, payload...)
+	}
+	return io.NopCloser(strings.NewReader(string(buf))), nil
 }
 
 func (f *fakeDocker) Ping(ctx context.Context) error { return nil }

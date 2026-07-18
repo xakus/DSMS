@@ -24,6 +24,21 @@ func (cl *Client) ServiceLogs(ctx context.Context, serviceID string, tail int, f
 	})
 }
 
+// ServiceLogsSnapshot — одноразовый дамп логов сервиса без follow, для
+// постраничной подгрузки истории. until (RFC3339Nano, опц.) ограничивает
+// выборку моментом ДО until — так листаем историю назад по времени.
+func (cl *Client) ServiceLogsSnapshot(ctx context.Context, serviceID string, tail int, until string) (io.ReadCloser, error) {
+	return cl.c.ServiceLogs(ctx, serviceID, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     false,
+		Tail:       strconv.Itoa(tail),
+		Timestamps: true,
+		Details:    true,
+		Until:      until,
+	})
+}
+
 // TaskLogs открывает поток логов одной задачи (3.5.5).
 func (cl *Client) TaskLogs(ctx context.Context, taskID string, tail int, follow bool) (io.ReadCloser, error) {
 	return cl.c.TaskLogs(ctx, taskID, container.LogsOptions{

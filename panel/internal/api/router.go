@@ -6,6 +6,7 @@ package api
 
 import (
 	"context"
+	"io"
 	"net/http"
 
 	"github.com/docker/docker/api/types/network"
@@ -44,6 +45,7 @@ type DockerAPI interface {
 		spec swarm.ServiceSpec, registryAuth string) ([]string, error)
 	ServiceRemove(ctx context.Context, id string) error
 	ServiceTasks(ctx context.Context, serviceID string) ([]swarm.Task, error)
+	ServiceLogsSnapshot(ctx context.Context, serviceID string, tail int, until string) (io.ReadCloser, error)
 	Tasks(ctx context.Context) ([]swarm.Task, error)
 	Secrets(ctx context.Context) ([]swarm.Secret, error)
 	SecretCreate(ctx context.Context, name string, data []byte) (string, error)
@@ -122,6 +124,7 @@ func NewRouter(d Deps) http.Handler {
 			// --- сервисы (FR-04) ---
 			r.Get("/services", h.services)
 			r.Get("/services/{id}", h.serviceDetail)
+			r.Get("/services/{id}/logs", h.serviceLogs)
 			r.Post("/services/{id}/scale", h.serviceScale)
 			r.Post("/services/{id}/start", h.serviceStart)
 			r.Post("/services/{id}/redeploy", h.serviceRedeploy)

@@ -30,10 +30,12 @@ type LogLine struct {
 	Topic   string `json:"topic"`   // всегда "logs"
 	Service string `json:"service"` // id сервиса
 	Task    string `json:"task,omitempty"`
-	Node    string `json:"node,omitempty"`
-	Stream  string `json:"stream"` // stdout | stderr
-	TS      string `json:"ts,omitempty"`
-	Line    string `json:"line"`
+	// TaskName — "<service>.<slot>.<taskid>": из slot получаем номер реплики.
+	TaskName string `json:"task_name,omitempty"`
+	Node     string `json:"node,omitempty"`
+	Stream   string `json:"stream"` // stdout | stderr
+	TS       string `json:"ts,omitempty"`
+	Line     string `json:"line"`
 }
 
 // LogStreamer управляет активными стримами логов сервисов.
@@ -51,9 +53,13 @@ func NewLogStreamer(src LogSource, sink LogSink) *LogStreamer {
 }
 
 // Start запускает стрим логов сервиса (идемпотентно).
-// tail ограничен 1000 — защита WS от лавины строк (разд. 10 ТЗ).
+// tail=0 — только новые строки (историю фронт грузит REST-ом), tail
+// ограничен 1000 сверху — защита WS от лавины строк (разд. 10 ТЗ).
 func (l *LogStreamer) Start(serviceID string, tail int) {
-	if tail <= 0 || tail > 1000 {
+	if tail < 0 {
+		tail = 0
+	}
+	if tail > 1000 {
 		tail = 1000
 	}
 	l.mu.Lock()
@@ -136,6 +142,30 @@ func (l *LogStreamer) pump(ctx context.Context, serviceID string, rc io.Reader) 
 	}
 }
 
+// ParseSnapshot читает весь stdcopy-поток (без follow) и разбирает строки
+// в LogLine. Используется REST-хендлером истории логов (постраничный вход
+// и подгрузка по скроллу). Топик и служебные поля Service клиент проставляет
+// себе сам — здесь заполняем только содержимое строки.
+func ParseSnapshot(rc io.Reader) []LogLine {
+	r := bufio.NewReaderSize(rc, 64*1024)
+	out := make([]LogLine, 0, 256)
+	for {
+		stream, payload, err := readFrame(r)
+		if err != nil {
+			return out
+		}
+		for line := range strings.SplitSeq(strings.TrimRight(string(payload), "\n"), "\n") {
+			if line == "" {
+				continue
+			}
+			ll := parseLine(line)
+			ll.Topic = "logs"
+			ll.Stream = stream
+			out = append(out, ll)
+		}
+	}
+}
+
 // readFrame читает один stdcopy-фрейм: header 8 байт
 // [streamType, 0,0,0, len(BE u32)], затем payload.
 func readFrame(r io.Reader) (stream string, payload []byte, err error) {
@@ -186,6 +216,8 @@ func parseLine(raw string) LogLine {
 			switch k {
 			case "com.docker.swarm.task.id":
 				ll.Task = v
+			case "com.docker.swarm.task.name":
+				ll.TaskName = v
 			case "com.docker.swarm.node.id":
 				ll.Node = v
 			}
