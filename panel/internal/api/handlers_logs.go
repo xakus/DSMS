@@ -4,6 +4,8 @@
 package api
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -16,6 +18,15 @@ import (
 
 // maxLogPage — верхний предел строк на одну страницу истории.
 const maxLogPage = 1000
+
+// logSnapshotTimeout — потолок ожидания снапшота. `docker service logs` умеет
+// «залипать» на мёртвых задачах сервиса (особенно при большом tail): по дедлайну
+// отдаём то, что успели прочитать, вместо бесконечного ожидания/пустого экрана.
+const logSnapshotTimeout = 15 * time.Second
+
+// safeLogTail — размер tail, который docker отдаёт стабильно; на него падаем
+// откатом, если запрос с большим tail вернул пусто (см. serviceLogs).
+const safeLogTail = 100
 
 // serviceLogs — GET /services/{id}/logs?tail=N&until=RFC3339Nano.
 //
@@ -34,14 +45,29 @@ func (h *handlers) serviceLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	until := r.URL.Query().Get("until")
 
-	rc, err := h.Docker.ServiceLogsSnapshot(r.Context(), id, tail, until)
+	ctx, cancel := context.WithTimeout(r.Context(), logSnapshotTimeout)
+	defer cancel()
+
+	lines, err := h.snapshotLines(ctx, id, tail, until)
 	if err != nil {
+		slog.Error("service logs snapshot open failed",
+			"service", id, "tail", tail, "until", until, "err", err)
 		writeErr(w, http.StatusBadGateway, "docker logs error")
 		return
 	}
-	defer rc.Close()
 
-	lines := streams.ParseSnapshot(rc)
+	// Обход бага docker: `service logs --tail N` при большом N на кластере с
+	// мёртвыми задачами часто отдаёт пусто, а маленький tail — стабильно. Если
+	// большой запрос вернул 0 строк — повторяем безопасным tail, чтобы показать
+	// пользователю хотя бы последние строки, а не чёрный экран.
+	if len(lines) == 0 && tail > safeLogTail {
+		slog.Warn("empty snapshot, retrying with smaller tail",
+			"service", id, "tail", tail, "retry_tail", safeLogTail)
+		if retry, rerr := h.snapshotLines(ctx, id, safeLogTail, until); rerr == nil && len(retry) > 0 {
+			lines = retry
+		}
+	}
+
 	// Проставляем id сервиса (клиент сопоставляет строки с выбранным сервисом).
 	for i := range lines {
 		lines[i].Service = id
@@ -63,11 +89,30 @@ func (h *handlers) serviceLogs(w http.ResponseWriter, r *http.Request) {
 		oldest = lines[0].TS
 	}
 
+	// Диагностика: сколько строк реально отдал docker при этом tail (в т.ч. 0).
+	// Пустой снапшот при непустом сервисе = сигнал проблемы `docker service logs`.
+	if len(lines) == 0 {
+		slog.Warn("service logs snapshot empty", "service", id, "tail", tail, "until", until)
+	} else {
+		slog.Info("service logs snapshot", "service", id, "tail", tail, "returned", len(lines))
+	}
+
 	writeJSON(w, map[string]any{
 		"lines":    lines,
 		"oldest":   oldest,  // курсор для следующей страницы (?until=oldest)
 		"has_more": hasMore, // есть ли ещё более старые строки
 	})
+}
+
+// snapshotLines открывает снапшот логов сервиса и разбирает его в строки,
+// гарантированно закрывая поток. Вынесено ради отката на меньший tail.
+func (h *handlers) snapshotLines(ctx context.Context, id string, tail int, until string) ([]streams.LogLine, error) {
+	rc, err := h.Docker.ServiceLogsSnapshot(ctx, id, tail, until)
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	return streams.ParseSnapshot(rc), nil
 }
 
 // logTime парсит RFC3339Nano-метку строки лога для сортировки; при неудаче

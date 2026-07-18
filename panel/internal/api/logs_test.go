@@ -64,3 +64,38 @@ func TestServiceLogsHistory(t *testing.T) {
 		t.Fatalf("oldest cursor mismatch: %q vs %q", page.Oldest, page.Lines[0].TS)
 	}
 }
+
+// TestServiceLogsFallback: если большой tail отдаёт пусто (баг docker),
+// хендлер откатывается на безопасный tail и всё же возвращает строки.
+func TestServiceLogsFallback(t *testing.T) {
+	fd := &fakeDocker{
+		nodes: []swarm.Node{
+			mkNode("m1", swarm.NodeRoleManager, swarm.NodeAvailabilityActive, swarm.NodeStateReady, true),
+		},
+		services: []swarm.Service{mkService("s1", "app_web", "nginx:1.27", 3, "app")},
+		logLines: []string{
+			"2026-07-05T12:00:01Z com.docker.swarm.node.id=n1 line-A",
+			"2026-07-05T12:00:02Z com.docker.swarm.node.id=n1 line-B",
+		},
+		emptyAboveTail: 100, // всё, что больше 100, вернётся пустым
+	}
+	srv, _ := newTestServer(t, fd)
+	client, _ := loginClient(t, srv)
+
+	// tail=500 → docker (fake) отдаёт пусто → откат на 100 → строки есть.
+	resp, err := client.Get(srv.URL + "/api/v1/services/s1/logs?tail=500")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("logs request: err=%v status=%v", err, resp.StatusCode)
+	}
+	var page struct {
+		Lines []struct {
+			Line string `json:"line"`
+		} `json:"lines"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(page.Lines) != 2 {
+		t.Fatalf("fallback: want 2 lines from retry, got %d", len(page.Lines))
+	}
+}

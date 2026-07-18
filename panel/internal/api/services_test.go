@@ -75,8 +75,9 @@ func TestServiceRedeploy(t *testing.T) {
 	}
 }
 
-// TestServiceDeploy: сбрасывает pinned digest, включает start-first и
-// бампает ForceUpdate — свежая версия образа по тому же тегу без простоя.
+// TestServiceDeploy: сбрасывает pinned digest и бампает ForceUpdate — свежая
+// версия образа по тому же тегу. Order (start-first) панель НЕ навязывает —
+// уважает UpdateConfig стека (fix da7cc7c), см. deploy-start-first-lesson.
 func TestServiceDeploy(t *testing.T) {
 	fd := clusterWithServices()
 	// Пиннутый digest — как Swarm хранит после первого запуска.
@@ -98,8 +99,10 @@ func TestServiceDeploy(t *testing.T) {
 	if got := spec.TaskTemplate.ForceUpdate; got != before+1 {
 		t.Fatalf("ForceUpdate: want %d, got %d", before+1, got)
 	}
-	if spec.UpdateConfig == nil || spec.UpdateConfig.Order != swarm.UpdateOrderStartFirst {
-		t.Fatalf("deploy must set start-first order")
+	// Панель НЕ должна навязывать order: в фикстуре UpdateConfig не задан —
+	// значит и после deploy остаётся nil (иначе вернулась бы беда с дублями реплик).
+	if spec.UpdateConfig != nil && spec.UpdateConfig.Order == swarm.UpdateOrderStartFirst {
+		t.Fatalf("deploy must NOT force start-first order")
 	}
 }
 
@@ -120,8 +123,9 @@ func TestServiceRollback(t *testing.T) {
 	}
 }
 
-// TestStackDeploy: deploy стека катит только его сервисы, сбрасывает digest,
-// ставит start-first и бампает ForceUpdate; чужой сервис не трогает (FR-08).
+// TestStackDeploy: deploy стека катит только его сервисы, сбрасывает digest
+// и бампает ForceUpdate; order не навязывает (уважает стек); чужой сервис
+// не трогает (FR-08).
 func TestStackDeploy(t *testing.T) {
 	fd := clusterWithServices()
 	fd.services[0].Spec.TaskTemplate.ContainerSpec.Image = "nginx:1.27@sha256:aa"
@@ -139,8 +143,8 @@ func TestStackDeploy(t *testing.T) {
 		if sp.TaskTemplate.ForceUpdate != 1 {
 			t.Fatalf("service %d: ForceUpdate must be 1", i)
 		}
-		if sp.UpdateConfig == nil || sp.UpdateConfig.Order != swarm.UpdateOrderStartFirst {
-			t.Fatalf("service %d: must set start-first", i)
+		if sp.UpdateConfig != nil && sp.UpdateConfig.Order == swarm.UpdateOrderStartFirst {
+			t.Fatalf("service %d: must NOT force start-first", i)
 		}
 	}
 	if got := fd.services[0].Spec.TaskTemplate.ContainerSpec.Image; got != "nginx:1.27" {

@@ -22,15 +22,21 @@ type fakeDocker struct {
 	secretData []string // сырые значения secrets — для проверки утечек
 	configs    []swarm.Config
 	networks   []network.Summary
-	rotated    bool     // был ли вызван RotateJoinTokens
+	rotated    bool // был ли вызван RotateJoinTokens
 	removed    []string
 	updates    []lastUpdate // история ServiceUpdate
 	logLines   []string     // stdcopy-payload'ы для ServiceLogsSnapshot
+	// emptyAboveTail>0 имитирует баг docker: при tail больше порога поток пуст.
+	emptyAboveTail int
 }
 
 // ServiceLogsSnapshot отдаёт заранее заданные строки в stdcopy-обёртке
 // (header 8 байт + payload) — как настоящий Docker log stream.
 func (f *fakeDocker) ServiceLogsSnapshot(ctx context.Context, serviceID string, tail int, until string) (io.ReadCloser, error) {
+	// Имитация бага: большой tail отдаёт пустой поток (проверка отката).
+	if f.emptyAboveTail > 0 && tail > f.emptyAboveTail {
+		return io.NopCloser(strings.NewReader("")), nil
+	}
 	var buf []byte
 	for _, ln := range f.logLines {
 		payload := []byte(ln + "\n")

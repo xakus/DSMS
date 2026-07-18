@@ -74,7 +74,9 @@
     "selectService": "Select a service",
     "filter": "Filter…",
     "loadingOlder": "Loading older lines…",
-    "begin": "— beginning of log —"
+    "begin": "— beginning of log —",
+    "emptyResult": "No lines returned for tail={tail}. Try a smaller value; the panel's own logs will show the reason.",
+    "loadError": "Failed to load logs: {msg}"
   },
   "events": {
     "events": "Events",
