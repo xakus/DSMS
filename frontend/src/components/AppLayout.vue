@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Каркас авторизованной части: сайдбар-навигация + шапка
 // (тема, язык, logout). Экраны рендерятся в слот.
-import { computed, h, type Component } from 'vue'
+import { computed, h, ref, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { onMounted } from 'vue'
@@ -30,6 +30,10 @@ const theme = useThemeStore()
 const metrics = useMetricsStore()
 const alerts = useAlertsStore()
 const ui = useUiStore()
+
+// На телефоне сайдбар свёрнут по умолчанию — иначе он съедает ширину и шапка
+// (колокольчик слева) уезжает за край экрана. Открыть можно триггером-баром.
+const isMobile = ref(typeof window !== 'undefined' && window.innerWidth < 768)
 
 // Колокольчик (3.12.2): подписка на алерты + тосты на новые.
 onMounted(() => {
@@ -97,7 +101,8 @@ async function logout() {
 
 <template>
   <n-layout has-sider class="app-root">
-    <n-layout-sider bordered collapse-mode="width" :width="220" :collapsed-width="0" show-trigger="bar">
+    <n-layout-sider bordered collapse-mode="width" :width="220" :collapsed-width="0"
+                    :default-collapsed="isMobile" show-trigger="bar">
       <div class="logo">
         <img class="logo-img" src="/logo.png" alt="DSMS" />
         <div class="logo-text">
@@ -109,8 +114,9 @@ async function logout() {
     </n-layout-sider>
     <n-layout>
       <n-layout-header bordered class="header">
-        <n-space justify="end" align="center">
-          <!-- Колокольчик активных алертов (FR-12 3.12.2) -->
+        <n-space justify="end" align="center" :wrap="true" class="topbar">
+          <!-- Колокольчик активных алертов (FR-12 3.12.2). Стоит первым, но на
+               телефоне флекс-обёртка не даёт ему уехать за край (см. .topbar). -->
           <n-badge :value="alerts.active.length" :max="99" :show="alerts.active.length > 0">
             <n-button quaternary size="small" @click="router.push({ name: 'alerts' })">🔔</n-button>
           </n-badge>
@@ -122,7 +128,7 @@ async function logout() {
             {{ theme.isDark ? '🌙' : '☀️' }}
           </n-button>
           <n-button quaternary size="small" @click="logout">
-            {{ t('dashboard.logout') }} ({{ auth.username }})
+            {{ t('dashboard.logout') }}<span class="uname"> ({{ auth.username }})</span>
           </n-button>
         </n-space>
       </n-layout-header>
@@ -172,10 +178,31 @@ async function logout() {
 .header {
   padding: 8px 16px;
 }
+/* Контролы шапки переносятся, а не обрезаются — на узком экране колокольчик
+   гарантированно виден (раньше он, будучи левым при justify=end, уезжал за край). */
+.topbar {
+  row-gap: 6px;
+}
 .content {
   padding: 20px 28px;
 }
 .lang {
   width: 72px;
+}
+/* Телефон: прячем имя пользователя (кнопка «Выход» была самой широкой и
+   выдавливала колокольчик), сужаем контент, компактнее селект языка. */
+@media (max-width: 640px) {
+  .uname {
+    display: none;
+  }
+  .lang {
+    width: 60px;
+  }
+  .content {
+    padding: 14px 12px;
+  }
+  .header {
+    padding: 8px 12px;
+  }
 }
 </style>

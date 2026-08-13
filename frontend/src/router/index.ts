@@ -18,6 +18,9 @@ export const router = createRouter({
     { path: '/disk', name: 'disk', component: () => import('../views/DiskUsageView.vue') },
     { path: '/alerts', name: 'alerts', component: () => import('../views/AlertsView.vue') },
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
+    // Catch-all: любой неизвестный путь (битая ссылка/уведомление, старый URL)
+    // не даёт пустой экран/404 — уводим на дашборд вместо тупика.
+    { path: '/:pathMatch(.*)*', name: 'notfound', redirect: { name: 'dashboard' } },
   ],
 })
 
