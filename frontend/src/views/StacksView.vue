@@ -3,10 +3,13 @@
 // redeploy/remove стека целиком (двойное подтверждение имени).
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NCard, NDataTable, NTag, NModal, NInput, useMessage, useDialog } from 'naive-ui'
+import { NCard, NDataTable, NTag, NModal, NInput, NButton, NIcon, NSpace, useMessage, useDialog } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { RefreshOutline, TrashOutline, CloudDownloadOutline } from '@vicons/ionicons5'
+import {
+  RefreshOutline, TrashOutline, CloudDownloadOutline, DocumentTextOutline, AddOutline,
+} from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
+import StackDeployModal from '../components/StackDeployModal.vue'
 import { rowActions } from '../utils/actions'
 import { api, ApiError } from '../api/client'
 import type { StackInfo } from '../types'
@@ -17,6 +20,18 @@ const dialog = useDialog()
 
 const stacks = ref<StackInfo[]>([])
 const loading = ref(false)
+
+// Модал деплоя из файла (FR-14): editName=null — новый стек, иначе правка.
+const deployShow = ref(false)
+const deployEditName = ref<string | null>(null)
+function openDeployNew() {
+  deployEditName.value = null
+  deployShow.value = true
+}
+function openDeployEdit(stack: StackInfo) {
+  deployEditName.value = stack.name
+  deployShow.value = true
+}
 
 // Модал удаления стека с вводом имени (3.8.3)
 const removeTarget = ref<StackInfo | null>(null)
@@ -113,7 +128,17 @@ function stackType(s: StackInfo): 'success' | 'error' | 'warning' {
 }
 
 const columns = computed<DataTableColumns<StackInfo>>(() => [
-  { title: t('stacks.name'), key: 'name' },
+  {
+    title: t('stacks.name'), key: 'name',
+    render: (row) => row.managed
+      ? h(NSpace, { align: 'center', size: 6, wrapItem: false },
+        { default: () => [
+          row.name,
+          h(NTag, { size: 'tiny', bordered: false, type: 'info' },
+            { default: () => t('stacks.fromFile') }),
+        ] })
+      : row.name,
+  },
   { title: t('stacks.services'), key: 'services', width: 110 },
   {
     title: t('services.replicas'), key: 'replicas', width: 120,
@@ -121,12 +146,16 @@ const columns = computed<DataTableColumns<StackInfo>>(() => [
       { default: () => `${row.running}/${row.desired}` }),
   },
   {
-    title: t('services.actions'), key: 'actions', width: 120,
+    title: t('services.actions'), key: 'actions', width: 150,
     render: (row) => row.name === '(no stack)' ? null :
       rowActions([
-        { icon: CloudDownloadOutline, tip: t('stacks.deployTip'), type: 'primary', onClick: () => deploy(row) },
+        // Только для managed-стеков: правка исходника + передеплой из файла.
+        ...(row.managed
+          ? [{ icon: DocumentTextOutline, tip: t('stacks.editFileTip'), onClick: () => openDeployEdit(row) }]
+          : []),
+        { icon: CloudDownloadOutline, tip: t('stacks.deployTip'), type: 'primary' as const, onClick: () => deploy(row) },
         { icon: RefreshOutline, tip: t('stacks.redeployTip'), onClick: () => redeploy(row) },
-        { icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => openRemove(row) },
+        { icon: TrashOutline, tip: t('common.remove'), type: 'error' as const, onClick: () => openRemove(row) },
       ]),
   },
 ])
@@ -135,11 +164,22 @@ const columns = computed<DataTableColumns<StackInfo>>(() => [
 <template>
   <AppLayout>
     <n-card :title="t('nav.stacks')" size="small">
+      <template #header-extra>
+        <n-button type="primary" size="small" @click="openDeployNew">
+          <template #icon><n-icon :component="AddOutline" /></template>
+          {{ t('stackDeploy.newButton') }}
+        </n-button>
+      </template>
       <n-data-table
         :columns="columns" :data="stacks" :loading="loading"
         size="small" :bordered="false" :row-key="(r: StackInfo) => r.name"
       />
     </n-card>
+
+    <!-- Деплой/правка стека из файла (FR-14) -->
+    <StackDeployModal
+      v-model:show="deployShow" :edit-name="deployEditName" @deployed="load"
+    />
 
     <!-- Remove stack: ввод имени (3.8.3) -->
     <n-modal :show="!!removeTarget" preset="dialog" type="error" :title="t('stacks.removeTitle')"

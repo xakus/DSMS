@@ -132,6 +132,14 @@ func (f *fakeDocker) ServiceDeploy(ctx context.Context, id string, version swarm
 	return f.ServiceUpdate(ctx, id, version, spec, registryAuth, "")
 }
 
+// ServiceCreate добавляет новый сервис в слепок и запоминает вызов (для тестов).
+func (f *fakeDocker) ServiceCreate(ctx context.Context, spec swarm.ServiceSpec, registryAuth string) (string, error) {
+	id := "svc-" + spec.Annotations.Name
+	f.services = append(f.services, swarm.Service{ID: id, Spec: spec})
+	f.updates = append(f.updates, lastUpdate{ID: id, Spec: spec, RegistryAuth: registryAuth})
+	return id, nil
+}
+
 func (f *fakeDocker) ServiceRemove(ctx context.Context, id string) error {
 	for i := range f.services {
 		if f.services[i].ID == id {

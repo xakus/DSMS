@@ -128,7 +128,30 @@
     "deployHint": "For each service in the stack the panel will re-pull the latest image for the current tag. The rollout follows the stack's compose update policy and may take a while.",
     "deployStarted": "Stack deploy started — updating in the background",
     "removeTitle": "Remove stack",
-    "removeHint": "This removes all {count} services of the stack. Type «{name}» to confirm."
+    "removeHint": "This removes all {count} services of the stack. Type «{name}» to confirm.",
+    "fromFile": "from file",
+    "editFileTip": "Edit file and redeploy"
+  },
+  "stackDeploy": {
+    "newButton": "Deploy stack",
+    "newTitle": "Deploy stack from file",
+    "editTitle": "Stack «{name}» — edit file",
+    "namePlaceholder": "Stack name (e.g. shad)",
+    "composeTab": "Compose YAML",
+    "uploadFile": "Upload .yml file",
+    "composePlaceholder": "Paste your docker-stack.yml here…",
+    "envTab": "Variables (env)",
+    "dotenvHint": "Contents of the .env file (one KEY=value per line) — substituted into ${'{'}VAR{'}'} in the YAML:",
+    "manualHint": "Or set variables manually (they override .env):",
+    "prune": "Remove services no longer in the file (careful!)",
+    "validate": "Validate",
+    "deploy": "Deploy",
+    "update": "Update & redeploy",
+    "previewTitle": "Validation passed — will deploy",
+    "previewNetworks": "Networks",
+    "errorTitle": "Error",
+    "done": "Done: created {created}, updated {updated}, removed {removed}",
+    "partial": "Partial: created {created}, updated {updated}, removed {removed}, failed {failed}"
   },
   "settings": {
     "general": "General",

@@ -13,10 +13,10 @@
 | 6 | [stage-6-alerts.md](stage-6-alerts.md) | In-app алерты (FR-12) | ✅ готов |
 | 7 | [stage-7-history-settings.md](stage-7-history-settings.md) | История метрик SQLite, Settings (окна 1ч–7дн) | ✅ готов |
 | 8 | [stage-8-polish-ci.md](stage-8-polish-ci.md) | Безопасность, i18n, multi-arch CI, документация | ✅ готов |
+| 9 | [stage-9-stack-deploy.md](stage-9-stack-deploy.md) | **v2:** деплой стека из compose-файла (FR-14) | 🚧 в работе |
 
-**Все 8 этапов v1 реализованы.** Дальше: проверка на живом Swarm-кластере
-(критерии в файлах этапов, помеченные «живой кластер»), затем тег v1.0.0 —
-release-workflow соберёт multi-arch образы в ghcr.io.
+**Все 8 этапов v1 реализованы.** Открыт скоуп v2 — этап 9 (FR-14, деплой стека
+из файла). Дальше по v2: Telegram-нотификации, роли пользователей, exec-терминал.
 
 Правила: MVP = этапы 1–4. Каждый этап завершается тестами
 (`go test`, `npm run build`), обновлением README/CLAUDE.md и коммитом.

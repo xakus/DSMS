@@ -21,6 +21,7 @@ func (h *handlers) stacks(w http.ResponseWriter, r *http.Request) {
 		Services int    `json:"services"`
 		Running  int    `json:"running"`
 		Desired  int    `json:"desired"`
+		Managed  bool   `json:"managed"` // развёрнут из файла (FR-14): есть исходник в БД
 	}
 	agg := map[string]*stackView{}
 	for _, v := range views {
@@ -36,6 +37,17 @@ func (h *handlers) stacks(w http.ResponseWriter, r *http.Request) {
 		sv.Services++
 		sv.Running += v.Running
 		sv.Desired += v.Desired
+	}
+	// Мёржим managed-стеки из БД: помечаем существующие и добавляем те, что
+	// ещё без живых сервисов (только что сохранён исходник / все остановлены).
+	if managed, err := h.Store.ManagedStacks(); err == nil {
+		for _, m := range managed {
+			if sv, ok := agg[m.Name]; ok {
+				sv.Managed = true
+			} else {
+				agg[m.Name] = &stackView{Name: m.Name, Managed: true}
+			}
+		}
 	}
 	out := make([]stackView, 0, len(agg))
 	for _, sv := range agg {
@@ -156,6 +168,8 @@ func (h *handlers) stackRemove(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = h.Store.DeleteServiceState(svc.ID)
 	}
+	// Если стек был managed (развёрнут из файла) — убираем и запись исходника.
+	_ = h.Store.DeleteStack(name)
 	s := sessionFrom(r)
 	_ = h.Store.AppendAudit(s.UserID, "stack.remove", "stack", name, "")
 	writeJSON(w, map[string]any{"status": "ok", "removed": len(services)})

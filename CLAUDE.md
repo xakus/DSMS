@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Текущее состояние
 
-Техническое задание — `dsms-tz-v1.md` (**версия 1.1**) — единственный источник истины по архитектуре и требованиям; перед реализацией любой части сверяйся с ним. FR-нумерация в ТЗ (FR-01…FR-13) — опорная система координат: в коде и коммитах ссылайся на FR-номера.
+Техническое задание — `dsms-tz-v1.md` (**версия 1.2**) — единственный источник истины по архитектуре и требованиям; перед реализацией любой части сверяйся с ним. FR-нумерация в ТЗ (FR-01…FR-14) — опорная система координат: в коде и коммитах ссылайся на FR-номера.
 
-Название продукта — **DSMS** (Docker Swarm Management System). Репозиторий: `git@github.com:xakus/DSMS.git`. **Все 8 этапов v1 реализованы** (статусы — `docs/plans/README.md`); осталась приёмка на живом Swarm и тег `v1.0.0`. Ключевые архитектурные факты сверх ТЗ: агент имеет docker.sock и локальный HTTP API `:9001` (df/volumes/prune — панель адресует его по IP из ingest); стек — агрегация по label, не объект; Stop сервиса запоминает реплики в `service_state`.
+Название продукта — **DSMS** (Docker Swarm Management System). Репозиторий: `git@github.com:xakus/DSMS.git`. **Все 8 этапов v1 реализованы** (статусы — `docs/plans/README.md`); осталась приёмка на живом Swarm и тег `v1.0.0`. **Открыт скоуп v2: этап 9 — деплой стека из compose-файла (FR-14).** Ключевые архитектурные факты сверх ТЗ: агент имеет docker.sock и локальный HTTP API `:9001` (df/volumes/prune — панель адресует его по IP из ingest); стек — агрегация по label, не объект (но FR-14 добавляет managed-стеки с сохранённым исходником в БД); Stop сервиса запоминает реплики в `service_state`.
+
+**FR-14 (деплой стека из файла):** пакет `internal/stackspec` — чистый конвертер compose→swarm на `compose-spec/compose-go/v2` (парсинг+интерполяция) + свой маппинг в `swarm.ServiceSpec` (НЕ docker/cli — образ остаётся ~15 МБ; конвертер уважает `UpdateConfig.Order` из файла, не навязывает start-first). Оркестратор `applyStack` в `handlers_stackdeploy.go`: сети → create/update сервисов по имени `<stack>_<svc>` → prune (по флагу). Исходник YAML+env хранится в таблице `stacks` (env шифруется AES-GCM, как registries). Эндпоинты: `POST /stacks/validate` (dry-run), `POST /stacks` (создать+развернуть), `PUT /stacks/{name}`, `GET /stacks/{name}/source`. Фронт: `components/StackDeployModal.vue` + кнопка/бейдж в `StacksView.vue`.
 
 ## Команды
 

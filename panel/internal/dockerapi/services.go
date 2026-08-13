@@ -43,6 +43,20 @@ func (cl *Client) ServiceDeploy(ctx context.Context, id string, version swarm.Ve
 	return resp.Warnings, err
 }
 
+// ServiceCreate создаёт новый сервис (FR-14: подъём стека из файла с нуля).
+// registryAuth — base64 X-Registry-Auth для приватных образов (FR-13);
+// QueryRegistry=true — Swarm сразу резолвит тег образа в реестре.
+func (cl *Client) ServiceCreate(ctx context.Context, spec swarm.ServiceSpec, registryAuth string) (string, error) {
+	resp, err := cl.c.ServiceCreate(ctx, spec, swarm.ServiceCreateOptions{
+		EncodedRegistryAuth: registryAuth,
+		QueryRegistry:       true,
+	})
+	if err != nil {
+		return "", err
+	}
+	return resp.ID, nil
+}
+
 // ServiceRemove удаляет сервис (3.4.3 Remove).
 func (cl *Client) ServiceRemove(ctx context.Context, id string) error {
 	return cl.c.ServiceRemove(ctx, id)

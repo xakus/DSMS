@@ -142,6 +142,30 @@ export interface StackInfo {
   services: number
   running: number
   desired: number
+  managed?: boolean // развёрнут из файла (FR-14): есть сохранённый исходник
+}
+
+/** Превью валидации стека (POST /stacks/validate). */
+export interface StackPreview {
+  name: string
+  networks: string[]
+  services: { name: string; image: string; mode: string; replicas: number }[]
+}
+
+/** Результат деплоя стека (POST /stacks, PUT /stacks/{name}). */
+export interface StackDeployResult {
+  created: string[] | null
+  updated: string[] | null
+  removed: string[] | null
+  failed: { name: string; error: string }[] | null
+}
+
+/** Сохранённый исходник стека (GET /stacks/{name}/source). */
+export interface StackSource {
+  name: string
+  compose_yaml: string
+  env: string
+  env_vars: Record<string, string>
 }
 
 /** Реестр (FR-13); пароль никогда не приходит с сервера. */

@@ -76,6 +76,17 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT
 );
 
+-- Managed-стеки (FR-14): исходный compose-файл + env для передеплоя.
+-- env_enc зашифрован (AES-GCM), т.к. в env бывают секреты (JWT, пароли БД).
+CREATE TABLE IF NOT EXISTS stacks (
+    name         TEXT PRIMARY KEY,
+    compose_yaml TEXT NOT NULL,
+    env_enc      BLOB,
+    created_at   INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL,
+    user_id      INTEGER
+);
+
 -- Живые метрики (шаг 3с): чтобы 15м-график переживал рестарт панели.
 -- Ретенция короткая (~20 мин), фоновая очистка в history-агрегаторе.
 CREATE TABLE IF NOT EXISTS metrics_live (

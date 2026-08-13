@@ -43,6 +43,7 @@ type DockerAPI interface {
 		spec swarm.ServiceSpec, registryAuth, rollback string) ([]string, error)
 	ServiceDeploy(ctx context.Context, id string, version swarm.Version,
 		spec swarm.ServiceSpec, registryAuth string) ([]string, error)
+	ServiceCreate(ctx context.Context, spec swarm.ServiceSpec, registryAuth string) (string, error)
 	ServiceRemove(ctx context.Context, id string) error
 	ServiceTasks(ctx context.Context, serviceID string) ([]swarm.Task, error)
 	ServiceLogsSnapshot(ctx context.Context, serviceID string, tail int, until string) (io.ReadCloser, error)
@@ -139,6 +140,11 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/stacks/{name}/redeploy", h.stackRedeploy)
 			r.Post("/stacks/{name}/deploy", h.stackDeploy)
 			r.Delete("/stacks/{name}", h.stackRemove)
+			// --- деплой стека из файла (FR-14) ---
+			r.Post("/stacks/validate", h.stackValidate)
+			r.Post("/stacks", h.stackCreate)
+			r.Get("/stacks/{name}/source", h.stackSource)
+			r.Put("/stacks/{name}", h.stackUpdate)
 
 			// --- журнал действий (FR-06) ---
 			r.Get("/audit", h.audit)
