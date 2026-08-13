@@ -1,0 +1,102 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DSMS — ТЕСТОВЫЙ стек для проверки деплоя из UI (FR-14).
+#
+# Лёгкие публичные образы (nginx, redis, http-echo) — быстро тянутся, ничего
+# не ломают. БЕЗ привязки к меткам нод (никаких constraints) — развернётся на
+# любых нодах кластера. Своя сеть test-net — с боевыми стеками не пересекается.
+#
+# КАК РАЗВЕРНУТЬ:
+#   Панель → «Стеки» → «Развернуть стек» → вставь этот файл →
+#   имя стека, например: shadtest → «Проверить» → «Развернуть».
+#
+# ПЕРЕМЕННЫЕ (вкладка «Переменные» → поле .env). Все НЕОБЯЗАТЕЛЬНЫ — если ничего
+# не вводить, подставятся значения по умолчанию (после :- в ${VAR:-...}):
+#   GREETING   — текст приветствия сервиса greeter  (по умолчанию: Hello from DSMS)
+#   APP_ENV    — «окружение», показывается в greeter (по умолчанию: production)
+#   NODE_TAG   — метка, видна в панели у сервиса greeter (по умолчанию: test)
+#
+# ЧТО ПОПРОБОВАТЬ:
+#   • Разворачивание: сервисы поднимутся, реплики станут running.
+#   • Работа: открой в браузере http://<IP-любой-ноды>:18081 (greeter),
+#     :18082 (stamp), :18080 (nginx). greeter покажет подставленный ${GREETING}.
+#   • Изменение: «Редактировать файл» → поменяй GREETING → «Обновить» —
+#     текст greeter сменится (redeploy на месте).
+#   • Масштаб: у сервиса web смени число реплик (scale).
+#   • Удаление: удали стан целиком кнопкой remove (двойное подтверждение).
+#
+# ENV vs ХАРДКОД:
+#   greeter, cache-check — используют ${VAR} (environment-переменные).
+#   web, stamp          — всё зашито в файле (хардкод).
+# ─────────────────────────────────────────────────────────────────────────────
+version: "3.9"
+
+networks:
+  test-net:
+    driver: overlay
+    attachable: true
+
+services:
+
+  # ── ХАРДКОД: nginx, 2 реплики. Проверка scale/redeploy. Порт 18080. ──────────
+  web:
+    image: nginx:alpine
+    ports:
+      - target: 80
+        published: 18080
+        protocol: tcp
+    networks: [ test-net ]
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+      update_config:
+        parallelism: 1
+        order: start-first
+
+  # ── ХАРДКОД: redis, внутренний (без портов). Сервис без публикации. ──────────
+  cache:
+    image: redis:alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks: [ test-net ]
+    deploy:
+      replicas: 1
+
+  # ── ENV: приветствие из ${GREETING} и ${APP_ENV}. Видно в браузере на :18081.
+  #    environment-блок (APP_ENV, NODE_TAG) виден в панели: карточка сервиса → Env.
+  greeter:
+    image: hashicorp/http-echo
+    command: ["-text=${GREETING:-Hello from DSMS}  [env=${APP_ENV:-production}]", "-listen=:5678"]
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      NODE_TAG: ${NODE_TAG:-test}
+    ports:
+      - target: 5678
+        published: 18081
+        protocol: tcp
+    networks: [ test-net ]
+    deploy:
+      replicas: 1
+
+  # ── ХАРДКОД: второй http-echo с фиксированным текстом (контраст с greeter). ──
+  #    Порт 18082. Показывает, что здесь ничего не подставляется.
+  stamp:
+    image: hashicorp/http-echo
+    command: ["-text=Hardcoded text (no env vars here)", "-listen=:5678"]
+    ports:
+      - target: 5678
+        published: 18082
+        protocol: tcp
+    networks: [ test-net ]
+    deploy:
+      replicas: 1
+
+  # ── ENV: redis с паролем из ${REDIS_PASSWORD}. Пароль виден в панели (Env)
+  #    и применяется реально — демонстрация env, влияющей на работу сервиса. ──
+  cache-check:
+    image: redis:alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-devsecret}", "--save", ""]
+    environment:
+      REDIS_MODE: ${REDIS_MODE:-standalone}
+    networks: [ test-net ]
+    deploy:
+      replicas: 1

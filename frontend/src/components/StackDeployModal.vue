@@ -6,9 +6,10 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NModal, NCard, NInput, NButton, NSpace, NCheckbox, NAlert, NUpload,
-  NDynamicInput, NTabs, NTabPane, NText, useMessage,
+  NDynamicInput, NTabs, NTabPane, NText, NPopover, NIcon, useMessage,
 } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
+import { HelpCircleOutline } from '@vicons/ionicons5'
 import { api, ApiError } from '../api/client'
 import type { StackPreview, StackDeployResult, StackSource } from '../types'
 
@@ -139,6 +140,35 @@ const canDeploy = computed(() => yaml.value.trim() !== '' && (isEdit.value || na
       :bordered="false" size="small" role="dialog" closable @close="emit('update:show', false)"
     >
       <n-space vertical size="large">
+        <!-- Подсказка: как указывать env-переменные, чтобы интерполяция сработала. -->
+        <n-popover trigger="click" placement="bottom-start" style="max-width: 480px">
+          <template #trigger>
+            <n-button text type="primary" size="small">
+              <template #icon><n-icon :component="HelpCircleOutline" /></template>
+              {{ t('stackDeploy.help.button') }}
+            </n-button>
+          </template>
+          <div class="help-body">
+            <p class="help-lead">{{ t('stackDeploy.help.intro') }}</p>
+
+            <p><b>{{ t('stackDeploy.help.step1') }}</b></p>
+            <pre class="help-code">image: ${REGISTRY}/app:${TAG:-latest}</pre>
+
+            <p><b>{{ t('stackDeploy.help.step2') }}</b></p>
+            <pre class="help-code">REGISTRY=myuser
+TAG=v3</pre>
+
+            <p><b>{{ t('stackDeploy.help.step3') }}</b></p>
+            <pre class="help-code">image: myuser/app:v3</pre>
+
+            <ul class="help-tips">
+              <li>{{ t('stackDeploy.help.tipDefault') }}</li>
+              <li>{{ t('stackDeploy.help.tipOverride') }}</li>
+              <li>{{ t('stackDeploy.help.tipMissing') }}</li>
+            </ul>
+          </div>
+        </n-popover>
+
         <!-- Имя стека — только при создании (при правке фиксировано). -->
         <n-input
           v-if="!isEdit" v-model:value="name" :placeholder="t('stackDeploy.namePlaceholder')"
@@ -241,5 +271,35 @@ const canDeploy = computed(() => yaml.value.trim() !== '' && (isEdit.value || na
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 13px;
+}
+/* Справка по env-переменным */
+.help-body {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.help-body p {
+  margin: 8px 0 4px;
+}
+.help-lead {
+  margin-top: 0;
+  opacity: 0.8;
+}
+.help-code {
+  margin: 0 0 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(128, 128, 128, 0.14);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.help-tips {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.help-tips li {
+  margin: 3px 0;
+  opacity: 0.85;
 }
 </style>

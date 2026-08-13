@@ -151,7 +151,17 @@
     "previewNetworks": "Networks",
     "errorTitle": "Error",
     "done": "Done: created {created}, updated {updated}, removed {removed}",
-    "partial": "Partial: created {created}, updated {updated}, removed {removed}, failed {failed}"
+    "partial": "Partial: created {created}, updated {updated}, removed {removed}, failed {failed}",
+    "help": {
+      "button": "How to set variables?",
+      "intro": "Variables in the YAML are substituted at deploy time. How it works:",
+      "step1": "1. Write placeholders in the YAML:",
+      "step2": "2. Set their values on the «Variables» tab (.env field or manual pairs):",
+      "step3": "3. On deploy the placeholders are replaced:",
+      "tipDefault": "The :- form sets a default value when the variable is not set.",
+      "tipOverride": "Manual pairs override whatever is set in the .env field.",
+      "tipMissing": "If a variable is missing and has no default — it becomes empty."
+    }
   },
   "settings": {
     "general": "General",
