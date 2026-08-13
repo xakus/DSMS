@@ -35,6 +35,9 @@ const ui = useUiStore()
 // (колокольчик слева) уезжает за край экрана. Открыть можно триггером-баром.
 const isMobile = ref(typeof window !== 'undefined' && window.innerWidth < 768)
 
+// Версия сборки фронта (из package.json через Vite define) — для угла шапки.
+const appVersion = __APP_VERSION__
+
 // Колокольчик (3.12.2): подписка на алерты + тосты на новые.
 onMounted(() => {
   // Синхронизировать интервал графиков с серверной настройкой (её видят агенты).
@@ -114,6 +117,8 @@ async function logout() {
     </n-layout-sider>
     <n-layout>
       <n-layout-header bordered class="header">
+        <!-- Версия в левом углу шапки — видно, какой билд реально загружен. -->
+        <span class="app-version" title="Версия интерфейса">v{{ appVersion }}</span>
         <n-space justify="end" align="center" :wrap="true" class="topbar">
           <!-- Колокольчик активных алертов (FR-12 3.12.2). Стоит первым, но на
                телефоне флекс-обёртка не даёт ему уехать за край (см. .topbar). -->
@@ -177,6 +182,18 @@ async function logout() {
 }
 .header {
   padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+/* Версия в левом углу шапки — маленькая и приглушённая, не мешает. */
+.app-version {
+  font-size: 12px;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 /* Контролы шапки переносятся, а не обрезаются — на узком экране колокольчик
    гарантированно виден (раньше он, будучи левым при justify=end, уезжал за край). */

@@ -2,9 +2,15 @@
 // откуда panel встраивает её через go:embed (разд. 2.4 ТЗ).
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import pkg from './package.json'
 
 export default defineConfig({
   plugins: [vue()],
+  // Версия фронта из package.json — показываем в углу интерфейса,
+  // чтобы визуально видеть, какой билд реально загружен (диагностика кэша).
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   build: {
     // Статика уезжает внутрь Go-бинарника — единственная точка связи с panel.
     outDir: '../panel/web/dist',

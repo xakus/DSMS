@@ -16,6 +16,9 @@ defineProps<{
 }>()
 
 const theme = useThemeStore()
+
+// Версия сборки — видна прямо на экране входа, чтобы проверить билд до логина.
+const appVersion = __APP_VERSION__
 </script>
 
 <template>
@@ -38,6 +41,7 @@ const theme = useThemeStore()
         <img class="brand-logo" src="/logo.png" alt="DSMS" />
         <div class="brand-name">DSMS</div>
         <div class="brand-sub">{{ subtitle ?? 'Docker Swarm Management System' }}</div>
+        <div class="brand-version">v{{ appVersion }}</div>
       </div>
       <slot />
     </div>
@@ -57,6 +61,13 @@ const theme = useThemeStore()
 }
 .auth-page.dark {
   background: #0c0d12;
+}
+/* Версия под названием — приглушённая, для быстрой проверки билда. */
+.brand-version {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- Анимированные цветные пятна фона ---
