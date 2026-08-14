@@ -1,0 +1,81 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DSMS — ДЕМО-стек: показывает env-переменные ПРОТИВ хардкода (FR-14).
+#
+# КАК РАЗВЕРНУТЬ:
+#   Панель → «Стеки» → «Развернуть стек»
+#     • вкладка «Compose YAML»  → вставь ЭТОТ файл
+#     • вкладка «Переменные»    → в поле .env вставь файл demo-stack.env
+#     • имя стека: demo → «Проверить» → «Развернуть»
+#
+# ФОКУС ДЕМО:
+#   Без .env  → подставятся значения по умолчанию (после :- в ${VAR:-...}).
+#   С .env    → подставятся значения из файла demo-stack.env.
+#   Открой в браузере http://<IP-ноды>:19081 (api) и сравни текст с .env и без.
+#
+# ГДЕ ЧТО:
+#   api, worker → берут переменные из ENV (${...})   ← окружение
+#   web, static → всё зашито в файле                 ← хардкод
+# ─────────────────────────────────────────────────────────────────────────────
+version: "3.9"
+
+networks:
+  demo-net:
+    driver: overlay
+    attachable: true
+
+services:
+
+  # ── ХАРДКОД: nginx, 2 реплики, порт 19080. Ничего из env. ────────────────────
+  web:
+    image: nginx:alpine
+    ports:
+      - target: 80
+        published: 19080
+        protocol: tcp
+    networks: [ demo-net ]
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        order: start-first
+
+  # ── ENV: текст и окружение берутся из .env. Видно в браузере на :19081. ──────
+  #    environment-блок (API_ENV, API_VERSION) виден в панели: карточка → Env.
+  api:
+    image: hashicorp/http-echo
+    command:
+      - "-text=${API_MESSAGE:-default message (no .env)}  [env=${API_ENV:-dev}, v=${API_VERSION:-0.0}]"
+      - "-listen=:5678"
+    environment:
+      API_ENV: ${API_ENV:-dev}
+      API_VERSION: ${API_VERSION:-0.0}
+    ports:
+      - target: 5678
+        published: 19081
+        protocol: tcp
+    networks: [ demo-net ]
+    deploy:
+      replicas: 1
+
+  # ── СМЕШАННО: пароль из .env (${REDIS_PASSWORD}), роль — хардкод. ────────────
+  worker:
+    image: redis:alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-changeme}", "--save", ""]
+    environment:
+      REDIS_ROLE: primary                       # хардкод
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}  # из .env
+    networks: [ demo-net ]
+    deploy:
+      replicas: 1
+
+  # ── ХАРДКОД: фиксированный текст, порт 19082. Здесь переменных нет вообще. ───
+  static:
+    image: hashicorp/http-echo
+    command: ["-text=Hardcoded service — no variables here", "-listen=:5678"]
+    ports:
+      - target: 5678
+        published: 19082
+        protocol: tcp
+    networks: [ demo-net ]
+    deploy:
+      replicas: 1
