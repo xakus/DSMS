@@ -47,7 +47,7 @@ jobs:
         with:
           go-version: '1.25'
           cache-dependency-path: panel/go.sum
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: web-dist
           path: panel/web/dist
