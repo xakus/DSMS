@@ -1,6 +1,8 @@
-# CI DSMS: сборка и тесты всех трёх компонентов (NFR-7).
-# Порядок важен: frontend собирается ПЕРВЫМ — panel встраивает
-# его статику через go:embed.
+# CI DSMS: сборка, тесты и статический анализ всех трёх компонентов
+# (NFR-7, NFR-12).
+#
+# Порядок важен: frontend собирается ПЕРВЫМ — panel встраивает его статику
+# через go:embed, без неё `go build` панели не соберётся.
 name: CI
 
 on:
@@ -18,11 +20,18 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Install & build (vue-tsc typecheck + vite)
+      - name: Install
         working-directory: frontend
-        run: |
-          npm ci
-          npm run build
+        run: npm ci
+      - name: Lint (eslint)
+        working-directory: frontend
+        run: npm run lint
+      - name: Unit tests (vitest)
+        working-directory: frontend
+        run: npm run test
+      - name: Build (vue-tsc typecheck + vite)
+        working-directory: frontend
+        run: npm run build
       # Статика нужна panel-джобе для go:embed
       - uses: actions/upload-artifact@v4
         with:
@@ -48,6 +57,11 @@ jobs:
           go build ./...
           go vet ./...
           go test ./...
+      - name: Lint (golangci-lint)
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          working-directory: panel
 
   agent:
     runs-on: ubuntu-latest
@@ -63,3 +77,36 @@ jobs:
           go build ./...
           go vet ./...
           go test ./...
+      - name: Lint (golangci-lint)
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          working-directory: agent
+
+  # Размеры образов — требование NFR-1/NFR-2. Раньше их проверяли глазами
+  # и лимит мог уехать незаметно; теперь превышение роняет сборку.
+  image-size:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build images (amd64, без публикации)
+        run: |
+          docker build -f panel/Dockerfile -t dsms-panel:ci .
+          docker build -f agent/Dockerfile -t dsms-agent:ci .
+      - name: Check size limits
+        run: |
+          # Лимиты из ТЗ: panel ≤ 25 МБ, agent ≤ 15 МБ.
+          check() {
+            local image="$1" limit_mb="$2"
+            local bytes size_mb
+            bytes=$(docker image inspect "$image" --format '{{.Size}}')
+            size_mb=$(( bytes / 1024 / 1024 ))
+            echo "$image: ${size_mb} MB (лимит ${limit_mb} MB)"
+            if [ "$size_mb" -gt "$limit_mb" ]; then
+              echo "::error::$image превышает лимит: ${size_mb} MB > ${limit_mb} MB"
+              return 1
+            fi
+          }
+          check dsms-panel:ci 25
+          check dsms-agent:ci 15

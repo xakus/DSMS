@@ -1,0 +1,66 @@
+@startuml stack-deploy-sequence
+' FR-14: что происходит между нажатием «Развернуть» и поднятыми сервисами.
+' Рендер: plantuml -tsvg docs/architecture/stack-deploy-sequence.puml
+title Деплой стека из compose-файла (FR-14)
+
+skinparam backgroundColor transparent
+skinparam defaultFontName Helvetica
+skinparam sequence {
+  ArrowColor #1f6feb
+  LifeLineBorderColor #57606a
+  ParticipantBackgroundColor #1f6feb
+  ParticipantFontColor #ffffff
+}
+
+actor Администратор as user
+participant "SPA\nStackDeployModal" as ui
+participant "PANEL\nhandlers_stackdeploy" as api
+participant "stackspec\nпарсер и конвертер" as conv
+database "SQLite\nтаблица stacks" as db
+participant "Docker Engine\n(manager)" as docker
+
+== Проверка (ничего не создаётся) ==
+user -> ui : вставил YAML + env
+ui -> api : POST /stacks/validate
+api -> conv : разбор, интерполяция, конвертация
+conv --> api : сервисы, сети, secrets/configs,\n**warnings** — что не переносится
+api -> docker : список сетей / secrets / configs / сервисов
+docker --> api : текущее состояние
+api --> ui : превью: create / update / remove,\nотсутствующие external, warnings
+ui --> user : показывает, что произойдёт
+
+== Развёртывание ==
+user -> ui : «Развернуть»
+ui -> api : POST /stacks (или PUT /stacks/{name})
+api -> conv : повторный разбор
+api -> db : сохранить YAML + env (AES-GCM)\n**до** деплоя — источник правды переживёт сбой
+
+group Оркестрация applyStack
+  api -> docker : создать недостающие сети\n(label com.docker.stack.namespace)
+  api -> docker : создать недостающие secrets / configs
+  docker --> api : ID объектов
+  api -> api : подставить ID в ссылки сервисов
+  loop по каждому сервису <stack>_<svc>
+    alt сервис существует
+      api -> docker : ServiceUpdate
+    else новый
+      api -> docker : ServiceCreate
+    end
+  end
+  opt включён prune
+    api -> docker : удалить сервисы, ушедшие из файла
+  end
+end
+
+api -> db : запись в audit\n(только имя стека и сводка — без yaml/env)
+api --> ui : сводка: создано / обновлено / удалено,\nошибки по объектам, warnings
+ui --> user : результат
+
+note over api, docker
+  Ошибка одного объекта не роняет весь деплой:
+  собирается сводка, остальные сервисы поднимаются.
+  UpdateConfig.Order берётся из файла — панель
+  не навязывает start-first (урок FR-08).
+end note
+
+@enduml

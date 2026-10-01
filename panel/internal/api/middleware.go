@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/xakus/DSMS/panel/internal/auth"
 )
@@ -53,6 +54,26 @@ func (h *handlers) requireCSRF(next http.Handler) http.Handler {
 func sessionFrom(r *http.Request) *auth.Session {
 	s, _ := r.Context().Value(sessionKey).(*auth.Session)
 	return s
+}
+
+// realIP восстанавливает адрес клиента за reverse proxy (панель всегда за ним,
+// 3.7.5) — от него зависит rate-limit логина и записи audit.
+//
+// Берётся ПОСЛЕДНИЙ элемент X-Forwarded-For, а не первый. Первый элемент
+// приходит от клиента и подделывается тривиально: с ним атакующий менял бы
+// «свой IP» на каждом запросе и обходил лимит попыток входа. Последний
+// дописывает наш прокси, подставляя адрес, с которого реально пришёл запрос.
+// Заголовка нет — остаётся r.RemoteAddr.
+func realIP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if ip := strings.TrimSpace(parts[len(parts)-1]); ip != "" {
+				r.RemoteAddr = ip
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // securityHeaders — защитные заголовки на все ответы (этап 8, FR-07).

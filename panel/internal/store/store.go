@@ -7,6 +7,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite" // регистрация драйвера "sqlite"
@@ -110,7 +111,8 @@ type User struct {
 	Role         string
 }
 
-// Open открывает (создаёт) файл БД и применяет схему.
+// Open открывает (создаёт) файл БД и доводит схему до версии этой сборки
+// через миграции (NFR-9). Схема больше не применяется «вслепую» — см. migrate.go.
 func Open(path string) (*Store, error) {
 	// _pragma: WAL для конкурентного чтения, busy_timeout от блокировок.
 	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)", path)
@@ -120,11 +122,23 @@ func Open(path string) (*Store, error) {
 	}
 	// SQLite: одно соединение на запись, иначе SQLITE_BUSY под нагрузкой.
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema); err != nil {
+	if err := migrate(db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("apply schema: %w", err)
+		return nil, err
 	}
 	return &Store{db: db}, nil
+}
+
+// BackupTo делает онлайн-снимок БД в указанный файл (NFR-10).
+//
+// VACUUM INTO работает на живой базе, не блокируя панель, и отдаёт
+// консистентный дефрагментированный файл — в отличие от копирования файла
+// на диске, которое в режиме WAL может дать битый снимок.
+func (s *Store) BackupTo(path string) error {
+	// Плейсхолдер в VACUUM INTO не поддерживается — путь формирует только код
+	// (временный файл сервера), пользовательский ввод сюда не попадает.
+	_, err := s.db.Exec(fmt.Sprintf(`VACUUM INTO '%s'`, strings.ReplaceAll(path, "'", "''")))
+	return err
 }
 
 // Close закрывает соединение с БД.

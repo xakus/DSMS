@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/xakus/DSMS/agent/internal/buildinfo"
 	"github.com/xakus/DSMS/agent/internal/collector"
 	"github.com/xakus/DSMS/agent/internal/config"
 	"github.com/xakus/DSMS/agent/internal/dockerops"
@@ -22,9 +23,15 @@ import (
 )
 
 func main() {
+	// Проба для Docker HEALTHCHECK: ходим к себе и выходим (см. healthcheck.go).
+	if isHealthcheckMode(os.Args) {
+		os.Exit(runHealthcheck())
+	}
+
 	// Структурированные JSON-логи в stdout (NFR-8).
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
+	slog.Info("dsms agent starting", "version", buildinfo.Version, "commit", buildinfo.Commit)
 
 	cfg, err := config.Load()
 	if err != nil {

@@ -71,7 +71,7 @@ func loadConvert(t *testing.T, env map[string]string) *Converted {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	c, err := Convert("shad", p)
+	c, err := Convert("shad", p, env)
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -110,10 +110,10 @@ func TestConvertBasics(t *testing.T) {
 	}
 
 	// Имя, namespace-label (service и container уровни).
-	if auth.Spec.Annotations.Name != "shad_auth" {
-		t.Fatalf("name: %q", auth.Spec.Annotations.Name)
+	if auth.Spec.Name != "shad_auth" {
+		t.Fatalf("name: %q", auth.Spec.Name)
 	}
-	if auth.Spec.Annotations.Labels[StackLabel] != "shad" {
+	if auth.Spec.Labels[StackLabel] != "shad" {
 		t.Fatal("service namespace label потерян")
 	}
 	if auth.Spec.TaskTemplate.ContainerSpec.Labels[StackLabel] != "shad" {

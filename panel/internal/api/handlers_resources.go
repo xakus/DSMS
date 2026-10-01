@@ -10,6 +10,8 @@ import (
 	"sort"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/xakus/DSMS/panel/internal/dockerapi"
 )
 
 // usedBySecrets строит map: имя secret/config → имена использующих сервисов.
@@ -77,7 +79,7 @@ func (h *handlers) secretCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "name and data required")
 		return
 	}
-	id, err := h.Docker.SecretCreate(r.Context(), req.Name, []byte(req.Data))
+	id, err := h.Docker.SecretCreate(r.Context(), req.Name, []byte(req.Data), nil)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "secret create failed")
 		return
@@ -181,7 +183,7 @@ func (h *handlers) configCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "name and data required")
 		return
 	}
-	id, err := h.Docker.ConfigCreate(r.Context(), req.Name, []byte(req.Data))
+	id, err := h.Docker.ConfigCreate(r.Context(), req.Name, []byte(req.Data), nil)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "config create failed")
 		return
@@ -245,7 +247,11 @@ func (h *handlers) networkCreate(w http.ResponseWriter, r *http.Request) {
 	if req.Driver == "" {
 		req.Driver = "overlay"
 	}
-	id, err := h.Docker.NetworkCreate(r.Context(), req.Name, req.Driver, req.Attachable, req.Subnet)
+	id, err := h.Docker.NetworkCreate(r.Context(), req.Name, dockerapi.NetworkOptions{
+		Driver:     req.Driver,
+		Attachable: req.Attachable,
+		Subnet:     req.Subnet,
+	})
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "network create failed")
 		return

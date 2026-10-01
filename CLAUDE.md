@@ -4,11 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Текущее состояние
 
-Техническое задание — `dsms-tz-v1.md` (**версия 1.2**) — единственный источник истины по архитектуре и требованиям; перед реализацией любой части сверяйся с ним. FR-нумерация в ТЗ (FR-01…FR-14) — опорная система координат: в коде и коммитах ссылайся на FR-номера.
+Техническое задание — `dsms-tz-v1.md` (**версия 1.3**) — единственный источник истины по архитектуре и требованиям; перед реализацией любой части сверяйся с ним. FR-нумерация в ТЗ (FR-01…FR-14) — опорная система координат: в коде и коммитах ссылайся на FR-номера.
 
-Название продукта — **DSMS** (Docker Swarm Management System). Репозиторий: `git@github.com:xakus/DSMS.git`. **Все 8 этапов v1 реализованы** (статусы — `docs/plans/README.md`); осталась приёмка на живом Swarm и тег `v1.0.0`. **Открыт скоуп v2: этап 9 — деплой стека из compose-файла (FR-14).** Ключевые архитектурные факты сверх ТЗ: агент имеет docker.sock и локальный HTTP API `:9001` (df/volumes/prune — панель адресует его по IP из ingest); стек — агрегация по label, не объект (но FR-14 добавляет managed-стеки с сохранённым исходником в БД); Stop сервиса запоминает реплики в `service_state`.
+Название продукта — **DSMS** (Docker Swarm Management System). Репозиторий: `git@github.com:xakus/DSMS.git`. Лицензия — **GPL v3**. **Реализованы все 8 этапов v1 и этапы 9–13 скоупа v2** (статусы — `docs/plans/README.md`). Аудит 15.08.2026 (`docs/plans/audit-2026-08-15.md`) дал 32 находки `A-xx` — закрыты все, кроме **A-12** (приёмка на живом Swarm + теги `v1.0.0`/`v2.0.0`, чек-лист — `docs/acceptance-checklist.md`; там же скриншоты в README), **A-22** (Prometheus-метрики панели) и **A-26** (история деплоев стека с откатом) — последние два перенесены в v2.1 вместе с Telegram-нотификациями, ролями и exec-терминалом. Диаграммы архитектуры — `docs/architecture/` (PlantUML + SVG, рендер через Smetana, graphviz не нужен). Ключевые архитектурные факты сверх ТЗ: агент имеет docker.sock и локальный HTTP API `:9001` (df/volumes/prune — панель адресует его по IP из ingest); стек — агрегация по label, не объект (но FR-14 добавляет managed-стеки с сохранённым исходником в БД); Stop сервиса запоминает реплики в `service_state`.
 
-**FR-14 (деплой стека из файла):** пакет `internal/stackspec` — чистый конвертер compose→swarm на `compose-spec/compose-go/v2` (парсинг+интерполяция) + свой маппинг в `swarm.ServiceSpec` (НЕ docker/cli — образ остаётся ~15 МБ; конвертер уважает `UpdateConfig.Order` из файла, не навязывает start-first). Оркестратор `applyStack` в `handlers_stackdeploy.go`: сети → create/update сервисов по имени `<stack>_<svc>` → prune (по флагу). Исходник YAML+env хранится в таблице `stacks` (env шифруется AES-GCM, как registries). Эндпоинты: `POST /stacks/validate` (dry-run), `POST /stacks` (создать+развернуть), `PUT /stacks/{name}`, `GET /stacks/{name}/source`. Фронт: `components/StackDeployModal.vue` + кнопка/бейдж в `StacksView.vue`.
+**FR-14 (деплой стека из файла):** пакет `internal/stackspec` — чистый конвертер compose→swarm на `compose-spec/compose-go/v2` (парсинг+интерполяция) + свой маппинг в `swarm.ServiceSpec` (НЕ docker/cli — бинарник ~15 МБ; конвертер уважает `UpdateConfig.Order` из файла, не навязывает start-first). Оркестратор `applyStack` в `handlers_stackdeploy.go`: сети → secrets/configs → create/update сервисов по имени `<stack>_<svc>` → prune (по флагу). Исходник YAML+env хранится в таблице `stacks` (env шифруется AES-GCM, как registries). Эндпоинты: `POST /stacks/validate` (dry-run), `POST /stacks` (создать+развернуть), `PUT /stacks/{name}`, `GET /stacks/{name}/source`. Фронт: `components/StackDeployModal.vue` + кнопка/бейдж в `StacksView.vue`. Приватные образы (3.14.12): `registry_id` стека → `registryAuthHeader` → `X-Registry-Auth` в `applyStack` и в «Деплое стека»; хранится в `stacks.registry_id` (миграция 2).
+
+**Правила конвертера (этап 10, не сломать):** ничего из compose не теряется молча — что не переносится в Swarm, уходит в `Converted.Warnings` (`stackspec/warnings.go`) и показывается в UI до деплоя. `volumes` обязательно едут в `Mounts` (`mounts.go`): именованный том → `<stack>_<vol>`, external — без префикса, driver/driver_opts/labels сохраняются, иначе сервис теряет данные. `secrets`/`configs` (`fileobj.go`) резолвятся в ID **в оркестраторе** (`resolveRefs`), т.к. на этапе конвертации кластера не видно; `file:` невозможен (у панели нет диска пользователя) — ошибка с подсказкой про `external: true`; target секрета нормализуется обрезкой `/run/secrets/`. Label `com.docker.stack.namespace` ставится на сети, secrets, configs и тома — без него объект не опознаётся как часть стека. Существующие secrets/configs **не пересоздаются** (swarm-объекты неизменяемы) — новое значение = новое имя. Тело запросов со стеком ограничено 1 МБ (`decodeStackReq` → 413).
+
+## Качество кода (этап 12)
+
+`golangci-lint` (конфиг `.golangci.yml` в `panel/` и `agent/`: errcheck, staticcheck, gosec, bodyclose, noctx, errorlint) и `eslint` во фронте — **оба чисты, держи их такими**; всё это гоняется в CI вместе с vitest и проверкой размеров образов (job `image-size`, лимиты 25/15 МБ). Пороги покрытия по NFR-12: пакеты с бизнес-логикой ≥70%, `api` ≥65%. Не глуши линтер без комментария почему: правки по его находкам вскрыли реальные баги (обход rate-limit через подделку `X-Forwarded-For`, 500 на сервисе без `placement`, зависший реестр стримов логов). Свой `realIP` в `api/middleware.go` берёт **правый** элемент `X-Forwarded-For` — не заменяй на `middleware.RealIP` из chi.
 
 ## Команды
 
@@ -20,6 +26,10 @@ cd frontend && npm install && npm run build   # vue-tsc typecheck + vite build
 
 # Панель: сборка, vet, тесты (тесты API не требуют Docker daemon)
 cd panel && go build ./... && go vet ./... && go test ./...
+golangci-lint run ./...        # линтер (в panel и agent), должен быть чист
+
+# Фронт: линтер и юнит-тесты
+cd frontend && npm run lint && npm run test
 
 # Один тест: go test ./internal/api -run TestAuthFlow
 
@@ -97,6 +107,10 @@ Browser (SPA) ──HTTPS(за Nginx Proxy Manager)──> PANEL <──HTTP pus
 - **RBAC-задел (FR-07)**: в v1 один admin, но `users.role`, `session.user_id`, `audit.user_id` заложены с самого начала — роли в v2 без миграции схемы. Audit ссылается на `user_id`, не на строку-имя.
 - Все опасные операции (remove node/service/stack/secret/volume/network, demote, prune) → подтверждение в UI + запись в `audit` (SQLite).
 - Локализуется только пользовательский текст; структура i18n — JSON-словари.
+
+## Надёжность данных (этап 11)
+
+**Схема версионируется** через `PRAGMA user_version` (`internal/store/migrate.go`). Новое поле в схеме = новый шаг в `migrations` с версией +1; выпущенные шаги не редактируются (на проде они применены). Панель отказывается стартовать на БД с версией новее сборки — защита от отката. **Бэкап** — `Store.BackupTo` (`VACUUM INTO`, онлайн) → `POST /backup` → кнопка в Settings; в audit пишется факт снятия. **Версия сборки** — `internal/buildinfo`, подставляется линкером (`-X ...buildinfo.Version/Commit`, ARG VERSION/COMMIT в Dockerfile, build-args в release.yml), отдаётся в `/healthz` вместе с версией схемы и показывается в шапке UI (расхождение с бандлом = кэш браузера). **Хелсчеки:** образы на scratch, curl/wget нет — проба это сам бинарник (`panel -healthcheck` / `agent -healthcheck`, файлы `cmd/*/healthcheck.go`); прописана в обоих Dockerfile и в `dsms.yml`. У агента для этого появился незащищённый `GET /api/v1/healthz` на `:9001`.
 
 ## Модель данных (SQLite)
 

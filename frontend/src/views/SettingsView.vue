@@ -12,7 +12,7 @@ import type { DataTableColumns } from 'naive-ui'
 import { CreateOutline, TrashOutline, AddOutline } from '@vicons/ionicons5'
 import { rowActions } from '../utils/actions'
 import AppLayout from '../components/AppLayout.vue'
-import { api, ApiError } from '../api/client'
+import { api, ApiError, download } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { useUiStore } from '../stores/ui'
 import type { RegistryInfo } from '../types'
@@ -31,6 +31,22 @@ const retentionDays = ref(7)
 // Интервал отдачи метрик (серверная настройка): агенты тянут его раз в 10с
 // и шлют данные с этим периодом. В секундах для удобства.
 const intervalSec = ref(3)
+
+// --- Резервная копия БД (NFR-10) ---
+const backupBusy = ref(false)
+
+/** Снять и скачать снимок БД. Ключ шифрования в копию не входит. */
+async function downloadBackup() {
+  backupBusy.value = true
+  try {
+    await download('/backup', 'dsms-backup.db')
+    message.success(t('settings.backupDone'))
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : String(e))
+  } finally {
+    backupBusy.value = false
+  }
+}
 
 /** Загрузить настройки панели. */
 async function loadSettings() {
@@ -191,6 +207,17 @@ const columns = computed<DataTableColumns<RegistryInfo>>(() => [
                 </n-form-item>
                 <n-button type="primary" @click="saveThreshold">{{ t('common.save') }}</n-button>
               </n-form>
+            </n-card>
+
+            <!-- Резервная копия БД (NFR-10): исходники стеков и env есть
+                 только здесь — в кластере их нет. -->
+            <n-card :title="t('settings.backup')" size="small">
+              <n-space vertical>
+                <span class="hint">{{ t('settings.backupHint') }}</span>
+                <n-button :loading="backupBusy" @click="downloadBackup">
+                  {{ t('settings.backupDownload') }}
+                </n-button>
+              </n-space>
             </n-card>
 
             <!-- Ротация agent-token: только через Docker CLI -->

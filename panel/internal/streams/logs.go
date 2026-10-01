@@ -14,6 +14,10 @@ import (
 	"time"
 )
 
+// defaultReconnectDelay — пауза перед переподключением к оборванному потоку
+// логов (рестарт Docker daemon, NFR-5).
+const defaultReconnectDelay = 3 * time.Second
+
 // LogSource — источник лог-потока (реализуется dockerapi.Client).
 type LogSource interface {
 	ServiceLogs(ctx context.Context, serviceID string, tail int, follow bool) (io.ReadCloser, error)
@@ -42,6 +46,9 @@ type LogLine struct {
 type LogStreamer struct {
 	src  LogSource
 	sink LogSink
+	// reconnectDelay — поле, а не константа, чтобы тесты не ждали реальные
+	// секунды (и не делили глобальное состояние между собой).
+	reconnectDelay time.Duration
 
 	mu      sync.Mutex
 	cancels map[string]context.CancelFunc // serviceID → stop
@@ -49,7 +56,12 @@ type LogStreamer struct {
 
 // NewLogStreamer создаёт менеджер стримов.
 func NewLogStreamer(src LogSource, sink LogSink) *LogStreamer {
-	return &LogStreamer{src: src, sink: sink, cancels: make(map[string]context.CancelFunc)}
+	return &LogStreamer{
+		src:            src,
+		sink:           sink,
+		reconnectDelay: defaultReconnectDelay,
+		cancels:        make(map[string]context.CancelFunc),
+	}
 }
 
 // Start запускает стрим логов сервиса (идемпотентно).
@@ -67,6 +79,8 @@ func (l *LogStreamer) Start(serviceID string, tail int) {
 		l.mu.Unlock()
 		return
 	}
+	// nolint:gosec // G118: cancel не теряется — он живёт в l.cancels и
+	// вызывается либо из Stop, либо из defer в run при самозавершении стрима.
 	ctx, cancel := context.WithCancel(context.Background())
 	l.cancels[serviceID] = cancel
 	l.mu.Unlock()
@@ -88,6 +102,18 @@ func (l *LogStreamer) Stop(serviceID string) {
 // При обрыве потока (рестарт daemon, NFR-5) — переподключение через 3с,
 // пока есть подписчики.
 func (l *LogStreamer) run(ctx context.Context, serviceID string, tail int) {
+	// Стрим может завершиться сам (все отписались, пока поток был мёртв) —
+	// тогда запись в cancels обязана исчезнуть, иначе следующий Start сочтёт
+	// стрим работающим и логи сервиса больше не откроются.
+	defer func() {
+		l.mu.Lock()
+		if cancel, ok := l.cancels[serviceID]; ok {
+			cancel()
+			delete(l.cancels, serviceID)
+		}
+		l.mu.Unlock()
+	}()
+
 	first := true
 	for {
 		if ctx.Err() != nil {
@@ -113,7 +139,7 @@ func (l *LogStreamer) run(ctx context.Context, serviceID string, tail int) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(3 * time.Second):
+		case <-time.After(l.reconnectDelay):
 		}
 	}
 }

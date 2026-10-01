@@ -1,0 +1,57 @@
+@startuml c4-containers
+' Smetana — встроенный движок раскладки: рендер не требует graphviz.
+!pragma layout smetana
+' C4 уровень 2 — контейнеры: из чего состоит DSMS и как части общаются.
+' Рендер: plantuml -tsvg docs/architecture/c4-containers.puml
+title DSMS — контейнеры (C4, уровень 2)
+
+skinparam backgroundColor transparent
+skinparam defaultFontName Helvetica
+skinparam rectangle {
+  BackgroundColor #1f6feb
+  FontColor #ffffff
+  BorderColor #0d419d
+}
+skinparam database {
+  BackgroundColor #8250df
+  FontColor #ffffff
+}
+
+actor "Администратор" as admin
+
+package "Manager-нода" {
+  rectangle "PANEL\n[Go 1.25, chi]\nREST + WebSocket,\nклиент Docker API" as panel
+  rectangle "SPA\n[Vue 3, Naive UI]\nвстроена в бинарник\nчерез go:embed" as spa #388bfd
+  database "SQLite\n[modernc, без cgo]\nпользователи, audit,\nметрики, стеки" as db
+  rectangle "AGENT (manager)\n[Go, gopsutil]" as agent_m #57606a
+}
+
+package "Worker-нода (каждая)" {
+  rectangle "AGENT\n[Go 1.25, gopsutil]\nmode: global" as agent #1a7f37
+}
+
+rectangle "Docker Engine\n(docker.sock)" as docker #57606a
+
+admin --> spa : HTTPS через\nreverse proxy
+spa --> panel : REST /api/v1\nWebSocket /api/v1/ws
+panel --> db : чтение/запись
+panel --> docker : Engine API\n(сервисы, ноды, логи, события)
+
+agent --> panel : POST /ingest\nметрики, X-Agent-Token
+agent_m --> panel : POST /ingest
+panel --> agent : HTTP :9001\ndf / volumes / prune
+
+note right of agent
+  Метрики хоста: CPU, RAM, диски, сеть,
+  топ контейнеров. Интервал задаёт панель
+  (agent тянет настройку раз в 10с).
+  При недоступности панели — буфер 60с.
+end note
+
+note bottom of db
+  Живые точки — в памяти (кольцевой буфер)
+  и в metrics_live для прогрева после рестарта.
+  Схема версионируется миграциями (NFR-9).
+end note
+
+@enduml

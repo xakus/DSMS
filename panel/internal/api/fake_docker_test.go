@@ -10,6 +10,8 @@ import (
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/xakus/DSMS/panel/internal/dockerapi"
 )
 
 // fakeDocker — управляемый из тестов слепок кластера.
@@ -134,7 +136,7 @@ func (f *fakeDocker) ServiceDeploy(ctx context.Context, id string, version swarm
 
 // ServiceCreate добавляет новый сервис в слепок и запоминает вызов (для тестов).
 func (f *fakeDocker) ServiceCreate(ctx context.Context, spec swarm.ServiceSpec, registryAuth string) (string, error) {
-	id := "svc-" + spec.Annotations.Name
+	id := "svc-" + spec.Name
 	f.services = append(f.services, swarm.Service{ID: id, Spec: spec})
 	f.updates = append(f.updates, lastUpdate{ID: id, Spec: spec, RegistryAuth: registryAuth})
 	return id, nil
@@ -164,11 +166,11 @@ func (f *fakeDocker) Tasks(ctx context.Context) ([]swarm.Task, error) { return f
 
 func (f *fakeDocker) Secrets(ctx context.Context) ([]swarm.Secret, error) { return f.secrets, nil }
 
-func (f *fakeDocker) SecretCreate(ctx context.Context, name string, data []byte) (string, error) {
+func (f *fakeDocker) SecretCreate(ctx context.Context, name string, data []byte, labels map[string]string) (string, error) {
 	id := "sec-" + name
 	f.secrets = append(f.secrets, swarm.Secret{
 		ID:   id,
-		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}},
 	})
 	f.secretData = append(f.secretData, string(data)) // для проверки утечек в тестах
 	return id, nil
@@ -195,11 +197,11 @@ func (f *fakeDocker) ConfigInspect(ctx context.Context, id string) (swarm.Config
 	return swarm.Config{}, errors.New("no such config")
 }
 
-func (f *fakeDocker) ConfigCreate(ctx context.Context, name string, data []byte) (string, error) {
+func (f *fakeDocker) ConfigCreate(ctx context.Context, name string, data []byte, labels map[string]string) (string, error) {
 	id := "cfg-" + name
 	f.configs = append(f.configs, swarm.Config{
 		ID:   id,
-		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}, Data: data},
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}, Data: data},
 	})
 	return id, nil
 }
@@ -222,9 +224,17 @@ func (f *fakeDocker) NetworkInspect(ctx context.Context, id string) (network.Ins
 	return network.Inspect{}, errors.New("not implemented")
 }
 
-func (f *fakeDocker) NetworkCreate(ctx context.Context, name, driver string, attachable bool, subnet string) (string, error) {
+func (f *fakeDocker) NetworkCreate(ctx context.Context, name string, o dockerapi.NetworkOptions) (string, error) {
 	id := "net-" + name
-	f.networks = append(f.networks, network.Summary{ID: id, Name: name, Driver: driver, Attachable: attachable})
+	f.networks = append(f.networks, network.Summary{
+		ID:         id,
+		Name:       name,
+		Driver:     o.Driver,
+		Attachable: o.Attachable,
+		Internal:   o.Internal,
+		Options:    o.Options,
+		Labels:     o.Labels,
+	})
 	return id, nil
 }
 

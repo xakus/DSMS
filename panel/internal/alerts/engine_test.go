@@ -34,8 +34,8 @@ func (f *fakeStore) ResolveAlert(id, resolvedAt int64) error {
 
 // fakeNotifier — собирает доставленные алерты.
 type fakeNotifier struct {
-	mu    sync.Mutex
-	sent  []Alert
+	mu   sync.Mutex
+	sent []Alert
 }
 
 func (f *fakeNotifier) Notify(a Alert) {

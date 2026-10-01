@@ -128,6 +128,14 @@ func (h *handlers) stackDeploy(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "stack not found")
 		return
 	}
+	// Стек из файла с реестром FR-13 — приватные образы тянем с авторизацией.
+	regAuth := ""
+	if st, err := h.Store.StackByName(name); err == nil && st.RegistryID != nil {
+		if regAuth, err = h.registryAuthHeader(*st.RegistryID); err != nil {
+			writeErr(w, http.StatusBadRequest, "registry auth failed")
+			return
+		}
+	}
 	failed := 0
 	for _, sv := range services {
 		svc, err := h.Docker.ServiceInspect(r.Context(), sv.ID)
@@ -135,7 +143,7 @@ func (h *handlers) stackDeploy(w http.ResponseWriter, r *http.Request) {
 			failed++
 			continue
 		}
-		if err := h.deployService(r, svc, ""); err != nil {
+		if err := h.deployService(r, svc, regAuth); err != nil {
 			failed++
 		}
 	}

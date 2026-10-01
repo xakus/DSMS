@@ -28,7 +28,7 @@ type Collector struct {
 	ops      *dockerops.Ops // nil — docker.sock не смонтирован
 	hostname string
 
-	prevTime time.Time                     // время предыдущего тика
+	prevTime time.Time                      // время предыдущего тика
 	prevDisk map[string]disk.IOCountersStat // имя устройства → счётчики
 	prevNet  map[string]gnet.IOCountersStat // интерфейс → счётчики
 }

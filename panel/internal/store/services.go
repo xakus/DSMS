@@ -108,7 +108,19 @@ func (s *Store) UpdateRegistry(id int64, address, username string, passwordEnc [
 }
 
 // DeleteRegistry удаляет реестр.
+// Стеки, ссылавшиеся на реестр, остаются без него (FR-14): следующий деплой
+// пойдёт без авторизации, а не упадёт на «реестр не найден».
 func (s *Store) DeleteRegistry(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM registries WHERE id=?`, id)
-	return err
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }() // no-op после успешного Commit
+	if _, err := tx.Exec(`UPDATE stacks SET registry_id = NULL WHERE registry_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM registries WHERE id=?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

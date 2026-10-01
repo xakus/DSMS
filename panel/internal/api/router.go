@@ -19,6 +19,7 @@ import (
 	"github.com/xakus/DSMS/panel/internal/auth"
 	"github.com/xakus/DSMS/panel/internal/config"
 	"github.com/xakus/DSMS/panel/internal/crypto"
+	"github.com/xakus/DSMS/panel/internal/dockerapi"
 	"github.com/xakus/DSMS/panel/internal/metrics"
 	"github.com/xakus/DSMS/panel/internal/store"
 	"github.com/xakus/DSMS/panel/internal/ws"
@@ -49,15 +50,15 @@ type DockerAPI interface {
 	ServiceLogsSnapshot(ctx context.Context, serviceID string, tail int, until string) (io.ReadCloser, error)
 	Tasks(ctx context.Context) ([]swarm.Task, error)
 	Secrets(ctx context.Context) ([]swarm.Secret, error)
-	SecretCreate(ctx context.Context, name string, data []byte) (string, error)
+	SecretCreate(ctx context.Context, name string, data []byte, labels map[string]string) (string, error)
 	SecretRemove(ctx context.Context, id string) error
 	Configs(ctx context.Context) ([]swarm.Config, error)
 	ConfigInspect(ctx context.Context, id string) (swarm.Config, error)
-	ConfigCreate(ctx context.Context, name string, data []byte) (string, error)
+	ConfigCreate(ctx context.Context, name string, data []byte, labels map[string]string) (string, error)
 	ConfigRemove(ctx context.Context, id string) error
 	Networks(ctx context.Context) ([]network.Summary, error)
 	NetworkInspect(ctx context.Context, id string) (network.Inspect, error)
-	NetworkCreate(ctx context.Context, name, driver string, attachable bool, subnet string) (string, error)
+	NetworkCreate(ctx context.Context, name string, opts dockerapi.NetworkOptions) (string, error)
 	NetworkRemove(ctx context.Context, id string) error
 }
 
@@ -86,7 +87,10 @@ func NewRouter(d Deps) http.Handler {
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	// Свой realIP вместо middleware.RealIP: тот берёт ЛЕВЫЙ элемент
+	// X-Forwarded-For, который клиент подделывает и обходит rate-limit
+	// логина (GHSA-3fxj-6jh8-hvhx). См. realIP в middleware.go.
+	r.Use(realIP)
 	r.Use(middleware.Recoverer)
 	r.Use(securityHeaders)
 
@@ -171,6 +175,9 @@ func NewRouter(d Deps) http.Handler {
 
 			// --- алерты (FR-12) ---
 			r.Get("/alerts", h.alertsList)
+
+			// --- резервная копия БД (NFR-10) ---
+			r.Post("/backup", h.backupCreate)
 
 			// --- настройки (6.2 экран 12) ---
 			r.Get("/settings", h.getSettings)

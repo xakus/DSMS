@@ -15,10 +15,11 @@ func (cl *Client) Secrets(ctx context.Context) ([]swarm.Secret, error) {
 }
 
 // SecretCreate создаёт secret; значение уходит в Docker и обратно
-// не читается — secrets неизвлекаемы (3.9.2).
-func (cl *Client) SecretCreate(ctx context.Context, name string, data []byte) (string, error) {
+// не читается — secrets неизвлекаемы (3.9.2). labels нужны стекам (FR-14):
+// без label namespace объект не опознаётся как часть стека.
+func (cl *Client) SecretCreate(ctx context.Context, name string, data []byte, labels map[string]string) (string, error) {
 	resp, err := cl.c.SecretCreate(ctx, swarm.SecretSpec{
-		Annotations: swarm.Annotations{Name: name},
+		Annotations: swarm.Annotations{Name: name, Labels: labels},
 		Data:        data,
 	})
 	return resp.ID, err
@@ -40,10 +41,10 @@ func (cl *Client) ConfigInspect(ctx context.Context, id string) (swarm.Config, e
 	return cfg, err
 }
 
-// ConfigCreate создаёт config (3.9.3).
-func (cl *Client) ConfigCreate(ctx context.Context, name string, data []byte) (string, error) {
+// ConfigCreate создаёт config (3.9.3); labels — как у SecretCreate.
+func (cl *Client) ConfigCreate(ctx context.Context, name string, data []byte, labels map[string]string) (string, error) {
 	resp, err := cl.c.ConfigCreate(ctx, swarm.ConfigSpec{
-		Annotations: swarm.Annotations{Name: name},
+		Annotations: swarm.Annotations{Name: name, Labels: labels},
 		Data:        data,
 	})
 	return resp.ID, err
@@ -64,14 +65,34 @@ func (cl *Client) NetworkInspect(ctx context.Context, id string) (network.Inspec
 	return cl.c.NetworkInspect(ctx, id, network.InspectOptions{Verbose: true})
 }
 
-// NetworkCreate создаёт overlay-сеть (3.10.3).
-func (cl *Client) NetworkCreate(ctx context.Context, name, driver string, attachable bool, subnet string) (string, error) {
+// NetworkOptions — параметры создания сети. Отдельный тип, потому что кроме
+// ручного создания из UI (3.10.3) сети создаёт деплой стека (FR-14), которому
+// нужны labels, driver_opts и флаги internal/ipv6.
+type NetworkOptions struct {
+	Driver     string
+	Attachable bool
+	Internal   bool
+	EnableIPv6 bool
+	Subnet     string
+	Options    map[string]string // driver_opts
+	Labels     map[string]string
+}
+
+// NetworkCreate создаёт сеть (3.10.3, FR-14).
+func (cl *Client) NetworkCreate(ctx context.Context, name string, o NetworkOptions) (string, error) {
 	opts := network.CreateOptions{
-		Driver:     driver,
-		Attachable: attachable,
+		Driver:     o.Driver,
+		Attachable: o.Attachable,
+		Internal:   o.Internal,
+		Options:    o.Options,
+		Labels:     o.Labels,
 	}
-	if subnet != "" {
-		opts.IPAM = &network.IPAM{Config: []network.IPAMConfig{{Subnet: subnet}}}
+	if o.EnableIPv6 {
+		ipv6 := true
+		opts.EnableIPv6 = &ipv6
+	}
+	if o.Subnet != "" {
+		opts.IPAM = &network.IPAM{Config: []network.IPAMConfig{{Subnet: o.Subnet}}}
 	}
 	resp, err := cl.c.NetworkCreate(ctx, name, opts)
 	return resp.ID, err

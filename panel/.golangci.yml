@@ -1,0 +1,66 @@
+# Статический анализ PANEL (NFR-12).
+#
+# Набор подобран под продукт с доступом к docker.sock: главное — не пропустить
+# необработанную ошибку и небезопасную работу с данными. Косметические линтеры
+# (длина строки, стиль комментариев) намеренно не включены — они дают шум,
+# который перестают читать.
+version: "2"
+
+linters:
+  enable:
+    - errcheck      # непроверенные ошибки — источник тихих сбоев
+    - govet
+    - staticcheck
+    - ineffassign   # присваивание, которое никто не читает
+    - unused
+    - misspell      # опечатки в комментариях/строках
+    - gosec         # безопасность: панель управляет кластером
+    - bodyclose     # незакрытый resp.Body — утечка соединений к Docker API
+    - noctx         # HTTP-запрос без контекста не отменить
+    - errorlint     # сравнение ошибок без errors.Is/As
+
+  settings:
+    errcheck:
+      # Явный `_ =` означает осознанный пропуск (комментарий рядом объясняет).
+      check-blank: false
+      exclude-functions:
+        # Close на чтении: ошибка закрытия ничего не меняет для вызывающего,
+        # а обработка её в defer только зашумляет код.
+        - (*database/sql.Rows).Close
+        - (*database/sql.DB).Close
+        - (*os.File).Close
+        - (io.ReadCloser).Close
+        - (io.Closer).Close
+    gosec:
+      excludes:
+        # G104 дублирует errcheck.
+        - G104
+        # G304: файлы открываются по путям, которые формирует сама панель
+        # (временный бэкап) или админ через env (Docker secret).
+        - G304
+        # G124: флаг Secure у cookie задаётся параметром — для dev по HTTP
+        # он выключается сознательно (DSMS_COOKIE_INSECURE), см. auth.SetCookie.
+        - G124
+        # G704: healthcheck ходит на собственный адрес из env, не на ввод юзера.
+        - G704
+    misspell:
+      locale: US
+
+  exclusions:
+    rules:
+      # В тестах допускаются заглушки и упрощения.
+      - path: _test\.go
+        linters:
+          - gosec
+          - noctx
+          - errcheck
+          - bodyclose
+      # Методы store синхронные и контекст не принимают. Протаскивание ctx
+      # через всё хранилище — отдельная задача, а не повод глушить noctx везде.
+      - path: internal/store/
+        linters:
+          - noctx
+
+formatters:
+  enable:
+    - gofmt

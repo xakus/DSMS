@@ -13,10 +13,21 @@
 | 6 | [stage-6-alerts.md](stage-6-alerts.md) | In-app алерты (FR-12) | ✅ готов |
 | 7 | [stage-7-history-settings.md](stage-7-history-settings.md) | История метрик SQLite, Settings (окна 1ч–7дн) | ✅ готов |
 | 8 | [stage-8-polish-ci.md](stage-8-polish-ci.md) | Безопасность, i18n, multi-arch CI, документация | ✅ готов |
-| 9 | [stage-9-stack-deploy.md](stage-9-stack-deploy.md) | **v2:** деплой стека из compose-файла (FR-14) | 🚧 в работе |
+| 9 | [stage-9-stack-deploy.md](stage-9-stack-deploy.md) | **v2:** деплой стека из compose-файла (FR-14) | ✅ базовая часть |
+| 10 | [stage-10-fr14-hardening.md](stage-10-fr14-hardening.md) | FR-14 hardening: volumes, secrets/configs, warnings, лимиты | ✅ готов |
+| 11 | [stage-11-data-reliability.md](stage-11-data-reliability.md) | Миграции схемы, бэкап БД, версия сборки, хелсчеки | ✅ готов |
+| 12 | [stage-12-quality.md](stage-12-quality.md) | Тесты, golangci-lint/eslint, проверка размеров образов | ✅ готов |
+| 13 | [stage-13-docs-release.md](stage-13-docs-release.md) | Диаграммы, README/FAQ, LICENSE/CHANGELOG, приёмка, теги | ✅ кроме приёмки |
 
-**Все 8 этапов v1 реализованы.** Открыт скоуп v2 — этап 9 (FR-14, деплой стека
-из файла). Дальше по v2: Telegram-нотификации, роли пользователей, exec-терминал.
+**Все 8 этапов v1 и этапы 9–13 скоупа v2 выполнены.** Аудит 15.08.2026
+([audit-2026-08-15.md](audit-2026-08-15.md)) собрал 32 находки — закрыты все,
+кроме A-12 (приёмка и теги), A-22 (Prometheus) и A-26 (история деплоев стека).
+
+**Осталось до релиза:** пройти [чек-лист приёмки](../acceptance-checklist.md)
+на живом Swarm, добавить скриншоты в README и поставить теги `v1.0.0` / `v2.0.0`.
+
+Дальше по v2.1: Telegram-нотификации, роли пользователей, exec-терминал,
+Prometheus-метрики панели, история деплоев стека с откатом.
 
 Правила: MVP = этапы 1–4. Каждый этап завершается тестами
 (`go test`, `npm run build`), обновлением README/CLAUDE.md и коммитом.

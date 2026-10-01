@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xakus/DSMS/agent/internal/buildinfo"
 	"github.com/xakus/DSMS/agent/internal/config"
 	"github.com/xakus/DSMS/agent/internal/dockerops"
 )
@@ -31,6 +32,12 @@ func New(cfg *config.Config, ops *dockerops.Ops) *Server {
 // Run блокирует до отмены ctx.
 func (s *Server) Run(ctx context.Context) {
 	mux := http.NewServeMux()
+	// Проба живости для Docker HEALTHCHECK — без токена: она отвечает только
+	// «процесс жив», никаких данных о ноде не раскрывает.
+	mux.HandleFunc("GET /api/v1/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok","version":"` + buildinfo.Version + `"}`))
+	})
 	mux.HandleFunc("GET /api/v1/df", s.auth(s.df))
 	mux.HandleFunc("GET /api/v1/volumes", s.auth(s.volumes))
 	mux.HandleFunc("POST /api/v1/volumes/remove", s.auth(s.volumeRemove))
@@ -41,6 +48,8 @@ func (s *Server) Run(ctx context.Context) {
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	// nolint:gosec // G118: ctx здесь уже отменён (мы дождались его Done),
+	// поэтому у graceful shutdown обязан быть свой независимый таймаут.
 	go func() {
 		<-ctx.Done()
 		shCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -144,6 +144,9 @@
     "dotenvHint": "Contents of the .env file (one KEY=value per line) — substituted into ${'{'}VAR{'}'} in the YAML:",
     "manualHint": "Or set variables manually (they override .env):",
     "prune": "Remove services no longer in the file (careful!)",
+    "registry": "Registry for private images",
+    "registryNone": "No registry (public images)",
+    "registryHint": "Credentials from Settings → Registries: the panel passes them to Docker when pulling this stack's images and remembers them for “Deploy stack”.",
     "validate": "Validate",
     "deploy": "Deploy",
     "update": "Update & redeploy",
@@ -152,6 +155,16 @@
     "errorTitle": "Error",
     "done": "Done: created {created}, updated {updated}, removed {removed}",
     "partial": "Partial: created {created}, updated {updated}, removed {removed}, failed {failed}",
+    "previewSecrets": "Secrets",
+    "previewConfigs": "Configs",
+    "changeCreate": "will be created",
+    "changeUpdate": "will be updated",
+    "changeRemove": "no longer in the file",
+    "changeRemoveHint": "will be kept — enable prune to remove",
+    "missingTitle": "Missing external resources — create them first",
+    "warningsTitle": "Not transferred to Swarm — check before deploying",
+    "download": "Download YAML",
+    "doneWithWarnings": "Deployed, but {count} setting(s) were not transferred",
     "help": {
       "button": "How to set variables?",
       "intro": "Variables in the YAML are substituted at deploy time. How it works:",
@@ -186,7 +199,11 @@
     "regUser": "Username",
     "regPassword": "Password / token",
     "regKeepPassword": "leave empty to keep current",
-    "regLabel": "Label"
+    "regLabel": "Label",
+    "backup": "Database backup",
+    "backupHint": "The panel database holds stack sources, encrypted env values, users and audit — none of this exists anywhere in the cluster. Keep the DSMS_ENCRYPTION_KEY secret separately: without it the encrypted values in a backup cannot be read.",
+    "backupDownload": "Download backup",
+    "backupDone": "Backup downloaded"
   },
   "common": {
     "confirm": "Confirm",
@@ -229,5 +246,9 @@
     "message": "Message",
     "labelKey": "key",
     "labelValue": "value"
+  },
+  "header": {
+    "versionHint": "Interface build version",
+    "serverVersion": "server"
   }
 }

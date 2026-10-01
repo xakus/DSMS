@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -80,9 +81,7 @@ func (h *handlers) buildServiceViews(r *http.Request) ([]serviceView, error) {
 		}
 		if s.Spec.Mode.Replicated != nil {
 			v.Mode = "replicated"
-			if s.Spec.Mode.Replicated.Replicas != nil {
-				v.Desired = int(*s.Spec.Mode.Replicated.Replicas)
-			}
+			v.Desired = replicasToInt(s.Spec.Mode.Replicated.Replicas)
 		} else {
 			v.Mode = "global"
 			v.Desired = activeNodes
@@ -114,6 +113,16 @@ func shortImage(img string) string {
 }
 
 // services — GET /services (3.4.1).
+// replicasToInt безопасно приводит число реплик Swarm (uint64) к int для
+// ответа API: реальное значение — десятки, но подставленный извне мусор
+// не должен превратиться в отрицательное число на экране.
+func replicasToInt(r *uint64) int {
+	if r == nil || *r > math.MaxInt32 {
+		return 0
+	}
+	return int(*r)
+}
+
 func (h *handlers) services(w http.ResponseWriter, r *http.Request) {
 	views, err := h.buildServiceViews(r)
 	if err != nil {
@@ -174,10 +183,21 @@ func (h *handlers) serviceDetail(w http.ResponseWriter, r *http.Request) {
 	// Свежие сверху (история обновлений, 3.4.4).
 	sort.Slice(tv, func(i, j int) bool { return tv[i].CreatedAt > tv[j].CreatedAt })
 
+	// ContainerSpec и Placement — указатели: у сервиса без deploy.placement
+	// (а это норма) Placement == nil, и обращение к полю роняло обработчик.
+	cs := svc.Spec.TaskTemplate.ContainerSpec
+	if cs == nil {
+		cs = &swarm.ContainerSpec{}
+	}
+	var constraints []string
+	if p := svc.Spec.TaskTemplate.Placement; p != nil {
+		constraints = p.Constraints
+	}
+
 	spec := map[string]any{
-		"image":       s2(svc.Spec.TaskTemplate.ContainerSpec.Image),
-		"env":         svc.Spec.TaskTemplate.ContainerSpec.Env,
-		"constraints": svc.Spec.TaskTemplate.Placement.Constraints,
+		"image":       s2(cs.Image),
+		"env":         cs.Env,
+		"constraints": constraints,
 		"labels":      svc.Spec.Labels,
 	}
 	if svc.Spec.TaskTemplate.Resources != nil && svc.Spec.TaskTemplate.Resources.Limits != nil {
@@ -187,7 +207,7 @@ func (h *handlers) serviceDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	mounts := make([]string, 0)
-	for _, m := range svc.Spec.TaskTemplate.ContainerSpec.Mounts {
+	for _, m := range cs.Mounts {
 		mounts = append(mounts, fmt.Sprintf("%s:%s (%s)", m.Source, m.Target, m.Type))
 	}
 	spec["mounts"] = mounts

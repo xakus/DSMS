@@ -25,4 +25,10 @@ export default defineConfig({
       },
     },
   },
+  // Юнит-тесты (NFR-12). jsdom нужен для localStorage в сторах;
+  // сборка в panel/web/dist из тестов не запускается.
+  test: {
+    environment: 'jsdom',
+    include: ['src/**/*.test.ts'],
+  },
 })

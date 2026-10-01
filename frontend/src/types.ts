@@ -149,7 +149,22 @@ export interface StackInfo {
 export interface StackPreview {
   name: string
   networks: string[]
+  secrets: string[] | null
+  configs: string[] | null
   services: { name: string; image: string; mode: string; replicas: number }[]
+  /** Поля compose, которые панель не переносит в Swarm (ТЗ 3.14.10). */
+  warnings: StackWarning[] | null
+  /** external-ресурсы, которых нет в кластере (ТЗ 3.14.5). */
+  missing: string[] | null
+  /** Что изменится при деплое относительно текущего состояния. */
+  changes: { create: string[]; update: string[]; remove: string[] } | null
+}
+
+/** Предупреждение конвертера: поле сервиса, которое не попало в спеку. */
+export interface StackWarning {
+  service?: string
+  field: string
+  message: string
 }
 
 /** Результат деплоя стека (POST /stacks, PUT /stacks/{name}). */
@@ -157,7 +172,10 @@ export interface StackDeployResult {
   created: string[] | null
   updated: string[] | null
   removed: string[] | null
+  /** Созданные сети/secrets/configs (не сервисы). */
+  resources: string[] | null
   failed: { name: string; error: string }[] | null
+  warnings: StackWarning[] | null
 }
 
 /** Сохранённый исходник стека (GET /stacks/{name}/source). */
@@ -166,6 +184,8 @@ export interface StackSource {
   compose_yaml: string
   env: string
   env_vars: Record<string, string>
+  /** реестр FR-13 для приватных образов; null — образы публичные */
+  registry_id: number | null
 }
 
 /** Реестр (FR-13); пароль никогда не приходит с сервера. */

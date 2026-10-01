@@ -1,0 +1,45 @@
+@startuml c4-context
+' Smetana — встроенный движок раскладки: рендер не требует graphviz.
+!pragma layout smetana
+' C4 уровень 1 — контекст: кто и через что работает с DSMS.
+' Рендер: plantuml -tsvg docs/architecture/c4-context.puml
+title DSMS — контекст системы (C4, уровень 1)
+
+skinparam backgroundColor transparent
+skinparam defaultFontName Helvetica
+skinparam rectangle {
+  BackgroundColor #1f6feb
+  FontColor #ffffff
+  BorderColor #0d419d
+}
+skinparam actor {
+  BackgroundColor #6e7681
+  FontColor #ffffff
+}
+
+actor "Администратор\nкластера" as admin
+
+rectangle "Reverse proxy\n(Nginx Proxy Manager)" as proxy #57606a
+rectangle "DSMS\nПанель управления Docker Swarm" as dsms
+
+rectangle "Docker Swarm\n(manager + worker ноды)" as swarm #57606a
+rectangle "Реестры образов\n(ghcr.io, приватные)" as registry #57606a
+
+admin -right-> proxy : HTTPS\n(браузер)
+proxy -right-> dsms : HTTP внутри\noverlay-сети dsms
+
+dsms -down-> swarm : Docker Engine API\nчерез docker.sock
+dsms -right-> registry : X-Registry-Auth\nпри смене образа
+
+note bottom of dsms
+  Панель — только наблюдатель и управлятор (NFR-6):
+  своего состояния в кластере не держит, её потеря
+  не влияет на работу сервисов.
+end note
+
+note bottom of proxy
+  Панель НЕ публикует порт наружу (ТЗ 3.7.5):
+  доступ только через reverse proxy с HTTPS.
+end note
+
+@enduml

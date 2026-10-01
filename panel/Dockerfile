@@ -16,6 +16,10 @@ RUN mkdir -p ../panel/web && npm run build
 # Стадия 2: сборка Go-бинарника со встроенной статикой.
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
 ARG TARGETOS TARGETARCH
+# Версия сборки (NFR-11): подставляется линкером и отдаётся в /healthz —
+# по ней видно, какой бинарник реально работает и совпадает ли он с фронтом.
+ARG VERSION=dev
+ARG COMMIT=unknown
 WORKDIR /src/panel
 COPY panel/go.mod panel/go.sum ./
 RUN go mod download
@@ -23,11 +27,18 @@ COPY panel/ ./
 COPY --from=frontend /src/panel/web/dist ./web/dist
 # CGO выключен (sqlite — чистый Go), статический бинарник для scratch.
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags="-s -w" -o /out/panel ./cmd/panel
+    go build -trimpath \
+      -ldflags="-s -w \
+        -X github.com/xakus/DSMS/panel/internal/buildinfo.Version=${VERSION} \
+        -X github.com/xakus/DSMS/panel/internal/buildinfo.Commit=${COMMIT}" \
+      -o /out/panel ./cmd/panel
 
 # Стадия 3: финальный образ.
 FROM scratch
 COPY --from=build /out/panel /panel
 # TLS-корни не нужны: panel ходит только в unix-socket и слушает HTTP внутри overlay.
 EXPOSE 9000
+# В scratch нет curl/wget, поэтому проба — сам бинарник (см. healthcheck.go).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["/panel", "-healthcheck"]
 ENTRYPOINT ["/panel"]

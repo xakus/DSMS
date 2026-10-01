@@ -39,6 +39,10 @@ jobs:
           context: .
           file: ${{ matrix.component }}/Dockerfile
           platforms: linux/amd64,linux/arm64
+          # Версия сборки вшивается в бинарник (NFR-11): её отдаёт /healthz.
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -21,6 +21,7 @@ import (
 	"github.com/xakus/DSMS/panel/internal/alerts"
 	"github.com/xakus/DSMS/panel/internal/api"
 	"github.com/xakus/DSMS/panel/internal/auth"
+	"github.com/xakus/DSMS/panel/internal/buildinfo"
 	"github.com/xakus/DSMS/panel/internal/config"
 	"github.com/xakus/DSMS/panel/internal/crypto"
 	"github.com/xakus/DSMS/panel/internal/dockerapi"
@@ -47,9 +48,15 @@ func (n wsNotifier) Notify(a alerts.Alert) {
 }
 
 func main() {
+	// Проба для Docker HEALTHCHECK: ходим к себе и выходим (см. healthcheck.go).
+	if isHealthcheckMode(os.Args) {
+		os.Exit(runHealthcheck())
+	}
+
 	// Структурированные JSON-логи в stdout (NFR-8).
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
+	slog.Info("dsms panel starting", "version", buildinfo.Version, "commit", buildinfo.Commit)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -63,7 +70,7 @@ func main() {
 		slog.Error("store open failed", "err", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Docker Engine API через /var/run/docker.sock.
 	// WithAPIVersionNegotiation обязателен — иначе риск несовместимости версий (разд. 10 ТЗ).
@@ -72,7 +79,7 @@ func main() {
 		slog.Error("docker client init failed", "err", err)
 		os.Exit(1)
 	}
-	defer docker.Close()
+	defer func() { _ = docker.Close() }()
 
 	// Кольцевой буфер live-метрик: 15 минут при шаге 3с (разд. 2.2 ТЗ).
 	buf := metrics.NewClusterBuffer(15*time.Minute, 3*time.Second)

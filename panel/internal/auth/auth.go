@@ -43,7 +43,7 @@ type Session struct {
 // Manager — in-memory менеджер сессий + rate-limit login-попыток.
 type Manager struct {
 	mu       sync.Mutex
-	sessions map[string]*Session   // token → session
+	sessions map[string]*Session    // token → session
 	attempts map[string][]time.Time // ip → времена неудачных попыток login
 	store    *store.Store
 	ttl      time.Duration

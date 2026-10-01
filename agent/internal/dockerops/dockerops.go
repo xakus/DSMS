@@ -35,10 +35,10 @@ func (o *Ops) Close() error { return o.c.Close() }
 
 // DF — данные `docker system df` для ответа панели (3.11.1).
 type DF struct {
-	Images      DFSection `json:"images"`
-	Containers  DFSection `json:"containers"`
-	Volumes     DFSection `json:"volumes"`
-	BuildCache  DFSection `json:"build_cache"`
+	Images     DFSection `json:"images"`
+	Containers DFSection `json:"containers"`
+	Volumes    DFSection `json:"volumes"`
+	BuildCache DFSection `json:"build_cache"`
 }
 
 // DFSection — одна категория disk usage.
@@ -172,4 +172,3 @@ func (o *Ops) Prune(ctx context.Context, targets []string, allImages bool) []Pru
 	}
 	return out
 }
-

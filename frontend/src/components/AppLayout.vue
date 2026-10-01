@@ -20,6 +20,7 @@ import { useMetricsStore } from '../stores/metrics'
 import { useAlertsStore } from '../stores/alerts'
 import { useUiStore } from '../stores/ui'
 import { wsClient } from '../api/ws'
+import { api } from '../api/client'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,6 +39,15 @@ const isMobile = ref(typeof window !== 'undefined' && window.innerWidth < 768)
 // Версия сборки фронта (из package.json через Vite define) — для угла шапки.
 const appVersion = __APP_VERSION__
 
+// Версия бэкенда (NFR-11): её отдаёт /healthz. Показываем рядом с версией
+// фронта — расхождение означает, что браузер держит старый бандл из кэша
+// (или наоборот, сервер ещё не обновился), и это надо видеть сразу.
+const serverVersion = ref('')
+const versionMismatch = computed(
+  () => serverVersion.value !== '' && serverVersion.value !== 'dev' &&
+        serverVersion.value.replace(/^v/, '') !== appVersion,
+)
+
 // Колокольчик (3.12.2): подписка на алерты + тосты на новые.
 onMounted(() => {
   // Синхронизировать интервал графиков с серверной настройкой (её видят агенты).
@@ -48,6 +58,11 @@ onMounted(() => {
     if (a.severity === 'critical') message.error(text, { duration: 8000 })
     else message.warning(text, { duration: 5000 })
   })
+  // Версия бэкенда: /healthz открыт без сессии, ошибку глушим — это
+  // информационная подпись, из-за неё не должен ломаться вход в панель.
+  api<{ version?: string }>('/healthz')
+    .then((h) => { serverVersion.value = h.version ?? '' })
+    .catch(() => {})
 })
 
 /** Собрать пункт меню: иконка + подпись-ссылка с тултипом-описанием. */
@@ -117,8 +132,14 @@ async function logout() {
     </n-layout-sider>
     <n-layout>
       <n-layout-header bordered class="header">
-        <!-- Версия в левом углу шапки — видно, какой билд реально загружен. -->
-        <span class="app-version" title="Версия интерфейса">v{{ appVersion }}</span>
+        <!-- Версия в левом углу шапки — видно, какой билд реально загружен.
+             Если версия сервера разошлась с версией бандла — подсвечиваем. -->
+        <span class="app-version" :title="t('header.versionHint')">
+          v{{ appVersion }}
+          <span v-if="versionMismatch" class="version-mismatch">
+            · {{ t('header.serverVersion') }} {{ serverVersion }}
+          </span>
+        </span>
         <n-space justify="end" align="center" :wrap="true" class="topbar">
           <!-- Колокольчик активных алертов (FR-12 3.12.2). Стоит первым, но на
                телефоне флекс-обёртка не даёт ему уехать за край (см. .topbar). -->
@@ -194,6 +215,11 @@ async function logout() {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex: 0 0 auto;
+}
+/* Расхождение версий фронта и бэкенда — почти всегда кэш браузера. */
+.version-mismatch {
+  color: #f0a020;
+  opacity: 1;
 }
 /* Контролы шапки переносятся, а не обрезаются — на узком экране колокольчик
    гарантированно виден (раньше он, будучи левым при justify=end, уезжал за край). */

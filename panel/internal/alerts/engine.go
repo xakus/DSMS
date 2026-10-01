@@ -10,6 +10,7 @@ package alerts
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -20,10 +21,10 @@ import (
 
 // Пороги и интервалы по умолчанию (настройка порогов — Settings, этап 7).
 const (
-	defaultDiskPct     = 90.0             // 3.12.1: диск > 90%
-	agentSilentAfter   = 60 * time.Second // 3.12.1: агент молчит > 60с
-	degradedAfter      = 60 * time.Second // 3.12.1: desired > running дольше N
-	checkInterval      = 15 * time.Second // периодические проверки
+	defaultDiskPct   = 90.0             // 3.12.1: диск > 90%
+	agentSilentAfter = 60 * time.Second // 3.12.1: агент молчит > 60с
+	degradedAfter    = 60 * time.Second // 3.12.1: desired > running дольше N
+	checkInterval    = 15 * time.Second // периодические проверки
 )
 
 // Alert — один алерт (активный или из истории).
@@ -239,7 +240,13 @@ func (e *Engine) checkDegradedServices(ctx context.Context) {
 		if s.Spec.Mode.Replicated == nil || s.Spec.Mode.Replicated.Replicas == nil {
 			continue // global-сервисы: покрываются agent_silent/node down
 		}
-		desired := int(*s.Spec.Mode.Replicated.Replicas)
+		// Число реплик у Swarm — uint64; ограничиваем, чтобы приведение к int
+		// не дало отрицательного «желаемого» количества на 32-битных сборках.
+		want := *s.Spec.Mode.Replicated.Replicas
+		if want > math.MaxInt32 {
+			want = math.MaxInt32
+		}
+		desired := int(want)
 		k := key{rule: "service_degraded", obj: s.ID}
 		if running[s.ID] < desired {
 			since, seen := e.degraded[s.ID]

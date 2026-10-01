@@ -8,24 +8,28 @@ type Stack struct {
 	Name        string
 	ComposeYAML string
 	EnvEnc      []byte // AES-GCM; nil, если env не задавался
-	CreatedAt   int64
-	UpdatedAt   int64
-	UserID      int64
+	// RegistryID — реестр FR-13 для приватных образов стека; nil — образы публичные.
+	RegistryID *int64
+	CreatedAt  int64
+	UpdatedAt  int64
+	UserID     int64
 }
 
 // SaveStack сохраняет или обновляет стек по имени (upsert). created_at
 // проставляется один раз, updated_at — на каждое сохранение.
-func (s *Store) SaveStack(name, composeYAML string, envEnc []byte, userID int64) error {
+// registryID == nil — стек без реестра (публичные образы).
+func (s *Store) SaveStack(name, composeYAML string, envEnc []byte, registryID *int64, userID int64) error {
 	now := time.Now().Unix()
 	_, err := s.db.Exec(
-		`INSERT INTO stacks (name, compose_yaml, env_enc, created_at, updated_at, user_id)
-		 VALUES (?, ?, ?, ?, ?, ?)
+		`INSERT INTO stacks (name, compose_yaml, env_enc, registry_id, created_at, updated_at, user_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(name) DO UPDATE SET
 		     compose_yaml = excluded.compose_yaml,
 		     env_enc      = excluded.env_enc,
+		     registry_id  = excluded.registry_id,
 		     updated_at   = excluded.updated_at,
 		     user_id      = excluded.user_id`,
-		name, composeYAML, envEnc, now, now, userID,
+		name, composeYAML, envEnc, registryID, now, now, userID,
 	)
 	return err
 }
@@ -35,9 +39,9 @@ func (s *Store) StackByName(name string) (*Stack, error) {
 	st := &Stack{}
 	var userID *int64
 	err := s.db.QueryRow(
-		`SELECT name, compose_yaml, env_enc, created_at, updated_at, user_id
+		`SELECT name, compose_yaml, env_enc, registry_id, created_at, updated_at, user_id
 		 FROM stacks WHERE name = ?`, name,
-	).Scan(&st.Name, &st.ComposeYAML, &st.EnvEnc, &st.CreatedAt, &st.UpdatedAt, &userID)
+	).Scan(&st.Name, &st.ComposeYAML, &st.EnvEnc, &st.RegistryID, &st.CreatedAt, &st.UpdatedAt, &userID)
 	if err != nil {
 		return nil, err
 	}

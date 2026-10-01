@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/xakus/DSMS/panel/internal/auth"
+	"github.com/xakus/DSMS/panel/internal/buildinfo"
 	"github.com/xakus/DSMS/panel/internal/metrics"
 )
 
@@ -34,8 +35,18 @@ func writeErr(w http.ResponseWriter, code int, msg string) {
 }
 
 // healthz — liveness-проба без аутентификации (разд. 4.1).
+// Отдаёт версию сборки и версию схемы БД (NFR-11): по ним видно, какой
+// бинарник реально работает и совпадает ли он с загруженным в браузер фронтом.
 func (h *handlers) healthz(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]string{"status": "ok"})
+	out := map[string]any{
+		"status":  "ok",
+		"version": buildinfo.Version,
+		"commit":  buildinfo.Commit,
+	}
+	if v, err := h.Store.SchemaVersion(); err == nil {
+		out["schema"] = v
+	}
+	writeJSON(w, out)
 }
 
 // setupStatus сообщает фронтенду, нужен ли экран первичной настройки (3.7.1).

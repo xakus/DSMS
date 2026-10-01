@@ -175,7 +175,7 @@ func (h *Hub) Handle(w http.ResponseWriter, r *http.Request) {
 				h.OnLastUnsub(k.topic, k.service)
 			}
 		}
-		conn.Close(websocket.StatusNormalClosure, "")
+		_ = conn.Close(websocket.StatusNormalClosure, "")
 	}()
 
 	// Ping/pong каждые 30 сек (разд. 4.2) — фоновая горутина.

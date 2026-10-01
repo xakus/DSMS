@@ -1,0 +1,57 @@
+# Автообновление зависимостей (NFR-12).
+#
+# Каждый компонент — отдельный модуль, поэтому у каждого своя запись.
+# Раз в неделю: чаще — шум в PR, реже — обновления безопасности приходят
+# слишком поздно.
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /panel
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(panel)"
+    groups:
+      # Docker SDK запинен на v28.5.2+incompatible: v29 разбит на модули
+      # moby/moby/* и конфликтует. Мажорные обновления сюда не пускаем —
+      # переход делается руками и с проверкой на живом кластере.
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: github.com/docker/docker
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: gomod
+    directory: /agent
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(agent)"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(frontend)"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "deps(ci)"
