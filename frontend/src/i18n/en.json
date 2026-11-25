@@ -4,7 +4,11 @@
     "username": "Username",
     "password": "Password",
     "submit": "Sign in",
-    "failed": "Invalid credentials"
+    "failed": "Wrong username or password. Check the keyboard layout, Caps Lock, and that the browser did not fill in an old saved password — type it by hand.",
+    "locked": "Too many failed attempts: sign-in from your address is blocked. Wait {minutes} min and try again — more attempts will not help now.",
+    "serverError": "The panel answered with error {status}. It is not the password: check that the panel service is running and the reverse proxy can reach it.",
+    "unreachable": "The panel does not respond. It is not the password: check the network and that the panel service is running.",
+    "cookieLost": "The password is correct, but the browser did not keep the session. This happens when the panel is opened over http:// — open it over https://."
   },
   "setup": {
     "title": "Initial setup",

@@ -12,9 +12,21 @@ export function setCsrf(token: string) {
 
 /** Ошибка API с HTTP-статусом и сообщением сервера. */
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  /**
+   * @param status        HTTP-статус ответа
+   * @param message       текст ошибки от сервера
+   * @param retryAfterSec через сколько секунд можно повторить (заголовок
+   *                      Retry-After; есть у 429 — блокировка входа)
+   */
+  constructor(public status: number, message: string, public retryAfterSec?: number) {
     super(message)
   }
+}
+
+/** Секунды из заголовка Retry-After; undefined, если его нет или там не число. */
+function retryAfterOf(res: Response): number | undefined {
+  const sec = Number(res.headers.get('Retry-After'))
+  return Number.isFinite(sec) && sec > 0 ? sec : undefined
 }
 
 /** Текущий CSRF-токен — для запросов в обход api() (скачивание файлов). */
@@ -66,6 +78,6 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   })
   if (res.status === 204) return undefined as T
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new ApiError(res.status, data.error ?? res.statusText)
+  if (!res.ok) throw new ApiError(res.status, data.error ?? res.statusText, retryAfterOf(res))
   return data as T
 }

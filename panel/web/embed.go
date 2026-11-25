@@ -16,6 +16,9 @@ import (
 //go:embed all:dist
 var distFS embed.FS
 
+// assetsPrefix — каталог файлов сборки с хэшем в имени (скрипты, стили).
+const assetsPrefix = "assets/"
+
 // SPAHandler отдаёт файлы SPA; любой не-API путь без файла падает
 // в index.html — client-side routing (разд. 6.1: никаких перезагрузок).
 //
@@ -37,6 +40,16 @@ func SPAHandler() http.HandlerFunc {
 		}
 		if _, err := fs.Stat(sub, p); err != nil {
 			if os.IsNotExist(err) {
+				// Файла сборки нет — честный 404, а не index.html. После
+				// обновления панели вкладка со старым интерфейсом просит
+				// файлы со старыми именами; HTML вместо скрипта браузер
+				// молча отбрасывал, и переход на экран (например, после
+				// входа) просто не происходил. 404 интерфейс умеет
+				// распознать и перезагрузить страницу.
+				if strings.HasPrefix(p, assetsPrefix) {
+					http.NotFound(w, r)
+					return
+				}
 				// SPA-fallback: отдать index.html, роутинг сделает Vue Router.
 				r.URL.Path = "/"
 				p = "index.html"
@@ -45,7 +58,7 @@ func SPAHandler() http.HandlerFunc {
 
 		// Хэшированные ассеты неизменны — можно кэшировать надолго.
 		// Всё остальное (index.html) — не кэшировать, чтобы обновления доходили.
-		if strings.HasPrefix(p, "assets/") {
+		if strings.HasPrefix(p, assetsPrefix) {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
 			w.Header().Set("Cache-Control", "no-cache")

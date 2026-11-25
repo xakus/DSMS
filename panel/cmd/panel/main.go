@@ -52,6 +52,10 @@ func main() {
 	if isHealthcheckMode(os.Args) {
 		os.Exit(runHealthcheck())
 	}
+	// Выдать хэш пароля для ADMIN_PASSWORD_HASH и выйти (см. hashpassword.go).
+	if isHashPasswordMode(os.Args) {
+		os.Exit(runHashPassword())
+	}
 
 	// Структурированные JSON-логи в stdout (NFR-8).
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -71,6 +75,20 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = db.Close() }()
+
+	// Пароль администратора из ADMIN_PASSWORD_HASH (3.7.1): первая настройка
+	// без setup-экрана или восстановление забытого пароля. Неверное значение
+	// — не стартуем: молча проигнорировать его значило бы оставить человека
+	// без доступа и без объяснения.
+	action, adminName, err := auth.ApplyAdminHash(db, cfg.AdminPasswordHash)
+	if err != nil {
+		slog.Error("ADMIN_PASSWORD_HASH rejected", "err", err)
+		os.Exit(1)
+	}
+	if action != auth.AdminHashSkipped {
+		slog.Warn("admin password is set from ADMIN_PASSWORD_HASH; remove the variable after signing in",
+			"result", action, "username", adminName)
+	}
 
 	// Docker Engine API через /var/run/docker.sock.
 	// WithAPIVersionNegotiation обязателен — иначе риск несовместимости версий (разд. 10 ТЗ).

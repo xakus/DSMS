@@ -203,3 +203,37 @@ func TestClearCookie(t *testing.T) {
 		t.Fatalf("сброшенная cookie потеряла флаги: %+v", c)
 	}
 }
+
+// TestRetryAfter: сколько ждать до снятия блокировки входа. Экран входа
+// показывает это время — без него блокировка выглядела как «пароль не
+// подходит», и пользователь продолжал попытки.
+func TestRetryAfter(t *testing.T) {
+	m := NewManager(nil, time.Hour)
+	const ip = "10.0.0.9:5555"
+
+	if d := m.RetryAfter(ip); d != 0 {
+		t.Fatalf("без неудач ждать нечего, получено %v", d)
+	}
+
+	// Самая старая из пяти неудач — 6 минут назад: ждать ещё 15 − 6 = 9 минут.
+	now := time.Now()
+	m.mu.Lock()
+	for i := range loginMaxAttempts {
+		m.attempts[ip] = append(m.attempts[ip], now.Add(-6*time.Minute+time.Duration(i)*time.Second))
+	}
+	m.mu.Unlock()
+
+	got := m.RetryAfter(ip)
+	want := loginWindow - 6*time.Minute
+	if diff := got - want; diff > time.Second || diff < -time.Second {
+		t.Fatalf("ждать %v, ожидалось около %v", got, want)
+	}
+
+	// Неудач меньше порога — вход открыт, ждать не нужно.
+	m.mu.Lock()
+	m.attempts[ip] = m.attempts[ip][:loginMaxAttempts-1]
+	m.mu.Unlock()
+	if d := m.RetryAfter(ip); d != 0 {
+		t.Fatalf("при %d неудачах ждать не нужно, получено %v", loginMaxAttempts-1, d)
+	}
+}

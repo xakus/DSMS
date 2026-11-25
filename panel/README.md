@@ -37,8 +37,11 @@ DSMS_DB=/tmp/dsms.db DSMS_AGENT_TOKEN=dev-token DSMS_COOKIE_INSECURE=1 go run ./
 
 Переменные окружения: `DSMS_LISTEN` (`:9000`), `DSMS_DB`, `DSMS_AGENT_TOKEN`
 (или secret-файл `DSMS_AGENT_TOKEN_FILE`, по умолчанию `/run/secrets/agent_token`),
-`ADMIN_PASSWORD_HASH` (опционально), `DSMS_COOKIE_INSECURE=1` (снимает флаг
-Secure с cookie — никогда не использовать в проде).
+`ADMIN_PASSWORD_HASH` (опционально: bcrypt-хэш пароля администратора — первая
+настройка без setup-экрана или восстановление забытого пароля; хэш выдаёт
+`panel -hash-password`, порядок действий — в корневом README, раздел FAQ),
+`DSMS_COOKIE_INSECURE=1` (снимает флаг Secure с cookie — никогда не
+использовать в проде).
 
 Тесты: `go test ./...` (интеграционные тесты API — без Docker daemon).
 

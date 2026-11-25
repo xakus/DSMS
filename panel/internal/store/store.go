@@ -163,6 +163,20 @@ func (s *Store) CreateUser(username, passwordHash, role string) (int64, error) {
 	return res.LastInsertId()
 }
 
+// FirstAdmin возвращает администратора с наименьшим id — учётную запись,
+// созданную при первой настройке; sql.ErrNoRows, если администраторов нет.
+// Нужен для восстановления доступа через ADMIN_PASSWORD_HASH (3.7.1).
+func (s *Store) FirstAdmin() (*User, error) {
+	u := &User{}
+	err := s.db.QueryRow(
+		`SELECT id, username, password_hash, role FROM users WHERE role = 'admin' ORDER BY id LIMIT 1`,
+	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
 // UserByUsername ищет пользователя по имени; sql.ErrNoRows если нет.
 func (s *Store) UserByUsername(username string) (*User, error) {
 	u := &User{}

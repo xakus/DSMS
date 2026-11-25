@@ -25,6 +25,27 @@ export const router = createRouter({
   ],
 })
 
+/** Ключ sessionStorage: когда страницу последний раз перезагружали из-за старой сборки. */
+const RELOAD_MARK_KEY = 'dsms.staleReloadAt'
+
+/** Повторная перезагрузка не чаще этого, мс: иначе при настоящей поломке был бы бесконечный цикл. */
+const RELOAD_GUARD_MS = 10_000
+
+/** Так браузеры сообщают, что файл экрана не загрузился (Chrome, Firefox, Safari). */
+const CHUNK_LOAD_ERROR = /dynamically imported module|Importing a module script failed|Unable to preload CSS/i
+
+// После обновления панели во вкладке остаётся старый интерфейс: он просит
+// файлы экранов со старыми именами, которых на сервере уже нет. Раньше
+// переход (например, на «Обзор» после входа) молча не происходил. Теперь
+// страница перезагружается и получает свежую сборку.
+router.onError((err: unknown, to) => {
+  if (!(err instanceof Error) || !CHUNK_LOAD_ERROR.test(err.message)) return
+  const last = Number(sessionStorage.getItem(RELOAD_MARK_KEY))
+  if (Number.isFinite(last) && Date.now() - last < RELOAD_GUARD_MS) return
+  sessionStorage.setItem(RELOAD_MARK_KEY, String(Date.now()))
+  window.location.assign(to.fullPath)
+})
+
 // Гард: без сессии — на /login. Сессия восстанавливается один раз при старте.
 router.beforeEach(async (to) => {
   if (to.name === 'login' || to.name === 'setup') return true

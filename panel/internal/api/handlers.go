@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -97,6 +98,15 @@ func (h *handlers) setup(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 	ip := r.RemoteAddr
 	if !h.Sessions.Allowed(ip) {
+		// Retry-After — сколько ждать, в секундах (округление вверх). Экран
+		// входа показывает это время: без него блокировка выглядела как
+		// «пароль не подходит», и пользователь продолжал попытки.
+		wait := int(math.Ceil(h.Sessions.RetryAfter(ip).Seconds()))
+		w.Header().Set("Retry-After", strconv.Itoa(max(wait, 1)))
+		// В журнал: без этой записи по логам панели нельзя было понять,
+		// почему человека не пускает. Имя и пароль не пишем — в поле имени
+		// по ошибке вводят и пароль.
+		slog.Warn("login rejected", "reason", "rate_limited", "ip", ip, "retry_after_sec", wait)
 		writeErr(w, http.StatusTooManyRequests, "too many attempts, try later")
 		return
 	}
@@ -111,6 +121,7 @@ func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 	u, err := h.Store.UserByUsername(req.Username)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && !auth.CheckPassword(u.PasswordHash, req.Password)) {
 		h.Sessions.RecordFailure(ip)
+		slog.Warn("login rejected", "reason", "invalid_credentials", "ip", ip)
 		// Экспоненциальный backoff против перебора (3.7.3).
 		time.Sleep(h.Sessions.FailureDelay(ip))
 		writeErr(w, http.StatusUnauthorized, "invalid credentials")

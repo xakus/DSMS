@@ -85,6 +85,28 @@ func (m *Manager) Allowed(ip string) bool {
 	return len(fresh) < loginMaxAttempts
 }
 
+// RetryAfter — через сколько с IP снова можно пробовать войти; 0 — можно
+// сейчас. Блокировка снимается, когда самая старая из свежих неудачных
+// попыток выходит за окно loginWindow.
+// Пример: 5-я неудача была 4 минуты назад, первая — 6 минут назад, окно
+// 15 минут → ждать ещё 9 минут.
+func (m *Manager) RetryAfter(ip string) time.Duration {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
+	var fresh []time.Time
+	for _, t := range m.attempts[ip] {
+		if now.Sub(t) < loginWindow {
+			fresh = append(fresh, t)
+		}
+	}
+	if len(fresh) < loginMaxAttempts {
+		return 0
+	}
+	// Попытки записаны по порядку: первая в списке — самая старая.
+	return loginWindow - now.Sub(fresh[0])
+}
+
 // RecordFailure фиксирует неудачную попытку входа с IP.
 func (m *Manager) RecordFailure(ip string) {
 	m.mu.Lock()
