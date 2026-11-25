@@ -78,6 +78,14 @@ func (o *Ops) containerPID(ctx context.Context, id string) (int, bool) {
 		return 0, false
 	}
 	o.pids[id] = info.State.Pid
+	// Заодно запоминаем лимит памяти из настроек контейнера: он нужен, когда
+	// cgroup не виден и цифры берутся у Docker (см. stats.go).
+	if info.HostConfig != nil {
+		// Memory — int64: 0 — лимита нет, отрицательных значений Docker не отдаёт.
+		if limit := info.HostConfig.Memory; limit > 0 {
+			o.memLimits[id] = uint64(limit)
+		}
+	}
 	return info.State.Pid, true
 }
 
@@ -116,7 +124,7 @@ func ratePerSec(cur, prev uint64, dt time.Duration) uint64 {
 	return uint64(float64(cur-prev) / sec)
 }
 
-// forgetNet чистит кэш PID и счётчики контейнеров, которых больше нет
+// forgetNet чистит кэш PID, лимитов и счётчики контейнеров, которых больше нет
 // (alive — ID запущенных сейчас). Без этого карты росли бы с каждым
 // перезапуском задач.
 func (o *Ops) forgetNet(alive map[string]bool) {
@@ -128,6 +136,11 @@ func (o *Ops) forgetNet(alive map[string]bool) {
 	for id := range o.prevNet {
 		if !alive[id] {
 			delete(o.prevNet, id)
+		}
+	}
+	for id := range o.memLimits {
+		if !alive[id] {
+			delete(o.memLimits, id)
 		}
 	}
 }

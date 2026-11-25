@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/docker/docker/api/types/container"
 )
 
 // write кладёт файл cgroup/procfs во временный каталог теста.
@@ -137,5 +139,70 @@ func TestForgetNet(t *testing.T) {
 	}
 	if len(o.pids) != 1 || len(o.prevNet) != 1 {
 		t.Fatalf("alive entries must stay: pids=%d prevNet=%d", len(o.pids), len(o.prevNet))
+	}
+}
+
+// cgroup v1 с драйвером systemd: каталог контейнера лежит в system.slice
+// внутри иерархии контроллера памяти. Раньше такая раскладка не находилась,
+// и у всех сервисов ноды в UI стояли прочерки.
+func TestFindCgroupV1Systemd(t *testing.T) {
+	base := t.TempDir()
+	const id = "abc123"
+	dir := filepath.Join(base, "memory", "system.slice", "docker-"+id+".scope")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if got := findCgroup(base, id); got != dir {
+		t.Fatalf("findCgroup = %q, ожидалось %q", got, dir)
+	}
+	if got := findCgroup(base, "other"); got != "" {
+		t.Fatalf("для чужого контейнера найдено %q, ожидалась пустая строка", got)
+	}
+}
+
+// Счётчик CPU в cgroup v1: контроллер «cpu,cpuacct», драйвер systemd.
+// Значение в наносекундах переводится в микросекунды.
+func TestReadCPUUsecV1Systemd(t *testing.T) {
+	base := t.TempDir()
+	const id = "abc123"
+	dir := filepath.Join(base, "cpu,cpuacct", "system.slice", "docker-"+id+".scope")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "cpuacct.usage"), []byte("2500000000\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Каталог памяти пустой: cpu.stat (v2) в нём нет, читаем v1.
+	usec, ok := readCPUUsec(base, t.TempDir(), id)
+	if !ok || usec != 2_500_000 {
+		t.Fatalf("readCPUUsec = %d, %v; ожидалось 2 500 000 мкс", usec, ok)
+	}
+}
+
+// Запасной путь: ответ Docker stats → показания контейнера. Память — как в
+// `docker stats`: usage минус неактивный файловый кэш.
+func TestStatsSample(t *testing.T) {
+	const limit = 512 << 20
+	v2 := container.StatsResponse{
+		CPUStats:    container.CPUStats{CPUUsage: container.CPUUsage{TotalUsage: 3_000_000_000}},
+		MemoryStats: container.MemoryStats{Usage: 900, Stats: map[string]uint64{"inactive_file": 600}},
+	}
+	got := statsSample(v2, limit)
+	if !got.cpuOK || got.cpuUsec != 3_000_000 {
+		t.Fatalf("CPU = %d мкс (ok=%v), ожидалось 3 000 000", got.cpuUsec, got.cpuOK)
+	}
+	if got.memUsed != 300 || got.memLimit != limit {
+		t.Fatalf("память %d / лимит %d, ожидалось 300 / %d", got.memUsed, got.memLimit, limit)
+	}
+
+	// cgroup v1: свой ключ кэша; лимита нет — 0, а не вся память ноды.
+	v1 := container.StatsResponse{
+		MemoryStats: container.MemoryStats{
+			Usage: 1000, Limit: 8 << 30,
+			Stats: map[string]uint64{"total_inactive_file": 250, "inactive_file": 1},
+		},
+	}
+	if got := statsSample(v1, 0); got.memUsed != 750 || got.memLimit != 0 {
+		t.Fatalf("v1: память %d / лимит %d, ожидалось 750 / 0", got.memUsed, got.memLimit)
 	}
 }

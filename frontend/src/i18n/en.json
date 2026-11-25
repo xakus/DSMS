@@ -62,13 +62,40 @@
     "removeUsedConfirm": "«{name}» is IN USE! Force-remove it?"
   },
   "disk": {
-    "prune": "Prune",
-    "reclaimable": "reclaimable",
-    "allImages": "prune all unused images (not only dangling)",
-    "pruneConfirm": "Prune {target} on {node}?",
-    "pruneHint": "Estimated space to reclaim: {size}. Only unused objects are removed.",
-    "pruned": "Reclaimed {size}",
-    "noAgents": "No agents have reported yet — disk usage is unavailable."
+    "prune": "Clean up",
+    "reclaimable": "will free",
+    "allImages": "also remove tagged images (all images without containers)",
+    "pruneConfirm": "Clean up on node {node}?",
+    "pruneHint": "Will be removed: {what}. This frees {size}. Running services are not affected.",
+    "pruned": "Freed {size}",
+    "noAgents": "No agents have reported yet — disk usage is unavailable.",
+    "refresh": "Refresh",
+    "size": "used",
+    "reclaimableAtLeast": "will free at least",
+    "explain": "“Will free” is calculated per image layer: a shared layer is counted once, and a layer needed by a running image is not counted at all. So the number is smaller than the sum of image sizes, but it matches what the cleanup really frees. “Clean up everything” removes containers, images, build cache and anonymous volumes in that order — this frees more than the buttons one by one.",
+    "keptHint": "Unused named volumes: {size}. Cleanup does not remove them — they hold service data. A volume can be removed in “Resources → Volumes”.",
+    "section": {
+      "images": "Images",
+      "containers": "Containers",
+      "volumes": "Volumes",
+      "build_cache": "Build cache"
+    },
+    "what": {
+      "images": "untagged images without containers",
+      "imagesAll": "all images without containers",
+      "containers": "stopped containers",
+      "volumes": "unused anonymous volumes",
+      "build_cache": "unused build cache"
+    },
+    "pruneHintApprox": "Will be removed: {what}. This frees at least {size}. Running services are not affected.",
+    "pruneFailed": "Cleanup failed: {err}",
+    "pruneAll": "Clean up everything",
+    "total": "will free in total",
+    "totalAtLeast": "will free in total at least",
+    "laterHint": "{size} more is freed only by “Clean up everything”: these image layers are held by stopped containers and the build cache.",
+    "pruneAllConfirm": "Clean up everything unused on node {node}?",
+    "pruneAllHint": "Will be removed in order: stopped containers, {images}, unused build cache, unused anonymous volumes. This frees {size}. Running services and named volumes are not affected.",
+    "pruneAllHintApprox": "Will be removed in order: stopped containers, {images}, unused build cache, unused anonymous volumes. This frees at least {size}. Running services and named volumes are not affected."
   },
   "logs": {
     "selectService": "Select a service",
@@ -124,7 +151,14 @@
     "noTasksStopped": "The service is stopped — no tasks. Start it from the services list.",
     "notFound": "Service not found",
     "notFoundHint": "It may have been removed, or the link is outdated.",
-    "backToList": "Back to services"
+    "backToList": "Back to services",
+    "updateState": "Service update: {state}",
+    "replicasHint": {
+      "counts": "Tasks running: {running} of {desired}.",
+      "over": "That is more than needed: the service update has not finished and old tasks were not removed. Check the service tasks; “Redeploy” usually helps.",
+      "under": "That is fewer than needed: some tasks did not start. See the service tasks and logs for the reason.",
+      "stopped": "The service was stopped from the panel. “Start” restores the previous replica count."
+    }
   },
   "stacks": {
     "name": "Stack",
@@ -309,10 +343,17 @@
     "tx": "Upload",
     "ofLimit": "of {limit}",
     "cpuHint": "CPU: 100% = one fully busy core (same as docker stats).",
-    "netHint": "Download and upload speed: sum over all tasks, loopback excluded",
-    "partial": "Incomplete data: metrics came from {got} of {total} tasks. The agent on some nodes is silent.",
-    "partialShort": "Incomplete data",
-    "missing": "No data from agents: the node agent is silent or outdated."
+    "netHint": "Receive (↓) and transmit (↑) rate: sum over all tasks, loopback excluded",
+    "partial": "Incomplete data: metrics came from {got} of {total} tasks.",
+    "memHint": "RAM: memory in use right now (without file cache, like docker stats). The second line is the limit, if set.",
+    "moreNodes": "{count} more",
+    "noData": {
+      "title": "No usage data: tasks are running, but no metrics arrived.",
+      "silent": "the node agent sends no metrics (not running or cannot reach the panel)",
+      "outdated": "the node agent is outdated — update the agent service to the panel version",
+      "failed": "the node agent could not query Docker — see the agent logs",
+      "unseen": "the agent has not reported this task yet (it has just started)"
+    }
   },
   "spec": {
     "image": "Image",

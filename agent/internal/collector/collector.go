@@ -7,6 +7,7 @@ package collector
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"sort"
 	"time"
@@ -22,11 +23,20 @@ import (
 	"github.com/xakus/DSMS/agent/internal/dockerops"
 )
 
+// dockerTimeout — сколько ждём Docker при сборе метрик контейнеров.
+// Docker под нагрузкой (сборка образа, массовый перезапуск) может отвечать
+// секундами; без предела зависший запрос остановил бы весь цикл сбора, и
+// нода пропала бы с дашборда целиком.
+const dockerTimeout = 10 * time.Second
+
 // Collector собирает снапшоты; хранит предыдущие счётчики для расчёта дельт.
 type Collector struct {
 	cfg      *config.Config
 	ops      *dockerops.Ops // nil — docker.sock не смонтирован
 	hostname string
+	// dockerFailing — прошлый опрос Docker не удался (чтобы писать в журнал
+	// один раз на серию сбоев, а не на каждый тик).
+	dockerFailing bool
 
 	prevTime time.Time                      // время предыдущего тика
 	prevDisk map[string]disk.IOCountersStat // имя устройства → счётчики
@@ -84,30 +94,55 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 	}
 	// --- Контейнеры: per-container CPU/RAM из cgroups, топ-N (FR-02, NFR-2a),
 	//     плюс потребление по задачам Swarm с сетью (FR-04 3.4.7) ---
-	if c.ops != nil {
-		if u, err := c.ops.ContainerMetrics(ctx, c.cfg.TopContainers); err == nil {
-			snap.Sys.Containers = u.Total
-			snap.Containers = make([]Container, 0, len(u.Top))
-			for _, m := range u.Top {
-				snap.Containers = append(snap.Containers, Container{
-					ID: m.ID, Name: m.Name, Service: m.Service,
-					CPUPct: m.CPUPct, MemUsed: m.MemUsed, MemLimit: m.MemLimit,
-				})
-			}
-			// Потребление каждой задачи Swarm — без отсечки топ-N (ТЗ 3.4.7).
-			snap.Tasks = make([]Task, 0, len(u.Tasks))
-			for _, m := range u.Tasks {
-				snap.Tasks = append(snap.Tasks, Task{
-					Task: m.Task, CPUCores: m.CPUCores,
-					MemUsed: m.MemUsed, MemLimit: m.MemLimit,
-					RxBps: m.RxBps, TxBps: m.TxBps,
-				})
-			}
-		}
-	}
+	c.collectContainers(ctx, &snap)
 
 	c.prevTime = now
 	return snap, nil
+}
+
+// collectContainers дописывает в снапшот метрики контейнеров и задач Swarm.
+// Итог опроса Docker уходит панели в TasksState: по нему она отличает
+// «на ноде нет задач» от «агент не смог спросить Docker» и во втором случае
+// не затирает прошлые цифры (ТЗ 3.4.7).
+func (c *Collector) collectContainers(ctx context.Context, snap *Snapshot) {
+	if c.ops == nil {
+		snap.TasksState = TasksFailed
+		return
+	}
+	dctx, cancel := context.WithTimeout(ctx, dockerTimeout)
+	defer cancel()
+	u, err := c.ops.ContainerMetrics(dctx, c.cfg.TopContainers)
+	if err != nil {
+		snap.TasksState = TasksFailed
+		if !c.dockerFailing {
+			slog.Warn("container metrics failed, task usage is not sent", "err", err)
+		}
+		c.dockerFailing = true
+		return
+	}
+	if c.dockerFailing {
+		slog.Info("container metrics recovered")
+	}
+	c.dockerFailing = false
+
+	snap.TasksState = TasksOK
+	snap.Sys.Containers = u.Total
+	snap.Containers = make([]Container, 0, len(u.Top))
+	for _, m := range u.Top {
+		snap.Containers = append(snap.Containers, Container{
+			ID: m.ID, Name: m.Name, Service: m.Service,
+			CPUPct: m.CPUPct, MemUsed: m.MemUsed, MemLimit: m.MemLimit,
+		})
+	}
+	// Потребление каждой задачи Swarm — без отсечки топ-N (ТЗ 3.4.7).
+	snap.Tasks = make([]Task, 0, len(u.Tasks))
+	for _, m := range u.Tasks {
+		snap.Tasks = append(snap.Tasks, Task{
+			Task: m.Task, CPUCores: m.CPUCores,
+			MemUsed: m.MemUsed, MemLimit: m.MemLimit,
+			RxBps: m.RxBps, TxBps: m.TxBps,
+		})
+	}
 }
 
 // collectDisk возвращает место и скорости I/O по точкам монтирования.

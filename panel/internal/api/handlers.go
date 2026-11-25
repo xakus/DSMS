@@ -168,9 +168,10 @@ func (h *handlers) ingest(w http.ResponseWriter, r *http.Request) {
 	// Из снапшота вырезаем: в буфере (300 точек на ноду), в БД и в рассылке
 	// браузерам эти данные не нужны и только раздували бы их (NFR-2a).
 	if h.TaskStats != nil {
-		h.TaskStats.Put(snap.NodeID, snap.Tasks)
+		h.TaskStats.Put(snap.NodeID, snap.Tasks, snap.TasksState)
 	}
 	snap.Tasks = nil
+	snap.TasksState = ""
 	h.Buffer.Put(snap)
 	// Персист живой точки в SQLite — чтобы 15м-график пережил рестарт панели.
 	// Ошибка не критична для приёма: логируем и продолжаем.

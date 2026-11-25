@@ -13,20 +13,28 @@ import type { DataTableColumns } from 'naive-ui'
 import { CloudDownloadOutline, DocumentTextOutline, SyncOutline, ArrowBackOutline } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
 import UsageStats from '../components/UsageStats.vue'
-import { isUpdateNoteworthy, usageColumns, USAGE_COLS_WIDTH } from '../utils/usage'
-import { fmtBytes, fmtDuration } from '../utils/format'
+import { isUpdateNoteworthy, usageColumns, USAGE_COLUMN_SPECS } from '../utils/usage'
+import { replicasHint, replicasTone } from '../utils/replicas'
+import type { ColumnSpec } from '../utils/columns'
+import { fmtBytes, fmtDuration, shortImageName } from '../utils/format'
 import { api, ApiError } from '../api/client'
 import { usePolling } from '../composables/usePolling'
+import { useColumnWidths } from '../composables/useColumnWidths'
 import type { ServiceDetail, ServiceResources, ServiceTask } from '../types'
 
 /** HTTP-статус «сервиса нет». */
 const HTTP_NOT_FOUND = 404
 
-/** Ширины колонок таблицы задач, px. */
-const COL = { slot: 60, state: 120, node: 140, message: 130, created: 175 } as const
-
-/** Минимальная ширина таблицы задач: уже — прокрутка внутри карточки. */
-const TASKS_MIN_WIDTH = COL.slot + COL.state + COL.node + USAGE_COLS_WIDTH + COL.message + COL.created
+/** Колонки таблицы задач: минимальная ширина, px, и доля лишней ширины. */
+const TASK_COLUMNS: ColumnSpec[] = [
+  { key: 'slot', base: 64, grow: 0.5 },
+  { key: 'state', base: 124, grow: 1 },
+  { key: 'node', base: 140, grow: 2 },
+  ...USAGE_COLUMN_SPECS,
+  { key: 'image', base: 168, grow: 2 },
+  { key: 'message', base: 132, grow: 3 },
+  { key: 'created_at', base: 176, grow: 1 },
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -38,6 +46,9 @@ const serviceId = route.params.id as string
 const svc = ref<ServiceDetail | null>(null)
 /** Сервис не найден (удалён или ссылка устарела). */
 const notFound = ref(false)
+
+// Точные ширины колонок под текущий экран (таблица не «дышит» от цифр).
+const { wrapRef, widths, minWidth } = useColumnWidths(TASK_COLUMNS)
 
 const { loading, refresh: load } = usePolling(async () => {
   try {
@@ -82,14 +93,10 @@ function stateType(s: string): 'success' | 'error' | 'warning' | 'default' {
   return 'warning'
 }
 
-/** Цвет реплик в шапке: остановлен панелью — нейтральный, не красный. */
-const replicasType = computed<'success' | 'error' | 'warning' | 'default'>(() => {
-  const s = svc.value
-  if (!s || s.stopped) return 'default'
-  if (s.running >= s.desired && s.desired > 0) return 'success'
-  if (s.running === 0 && s.desired === 0) return 'warning'
-  return 'error'
-})
+/** Цвет реплик в шапке — как в таблице сервисов (лишние задачи — жёлтый). */
+const replicasType = computed(() => (svc.value ? replicasTone(svc.value) : 'default'))
+/** Пояснение к числам реплик — в подсказке метки. */
+const replicasTitle = computed(() => (svc.value ? replicasHint(svc.value, t) : ''))
 
 /** Лимиты/резервы одной строкой: «CPU 0.5 · RAM 512 MiB». */
 function fmtResources(r: ServiceResources | undefined): string {
@@ -113,24 +120,29 @@ const commandLine = computed(() => {
 const labelEntries = computed(() => Object.entries(svc.value?.spec.labels ?? {}))
 
 const taskColumns = computed<DataTableColumns<ServiceTask>>(() => [
-  { title: 'Slot', key: 'slot', width: COL.slot },
+  { title: 'Slot', key: 'slot', width: widths.value.slot },
   {
-    title: t('nodes.state'), key: 'state', width: COL.state,
+    title: t('nodes.state'), key: 'state', width: widths.value.state,
     render: (row) => h(NTag, { size: 'small', bordered: false, type: stateType(row.state) },
       { default: () => row.state + (row.exit_code !== undefined ? ` (${row.exit_code})` : '') }),
   },
   {
     // Нода — ссылка на её страницу: оттуда видно, что ещё на ней работает.
-    title: t('services.node'), key: 'node', width: COL.node,
+    title: t('services.node'), key: 'node', width: widths.value.node,
     render: (row) => row.node_id
-      ? h(RouterLink, { to: { name: 'node', params: { id: row.node_id } }, class: 'row-link' },
+      ? h(RouterLink, { to: { name: 'node', params: { id: row.node_id } }, class: 'row-link one-line', title: row.node || row.node_id },
           { default: () => row.node || row.node_id })
       : '—',
   },
-  ...usageColumns<ServiceTask>(t),
-  { title: t('nodes.message'), key: 'message', minWidth: COL.message, ellipsis: { tooltip: true } },
+  ...usageColumns<ServiceTask>(t, widths.value),
   {
-    title: t('services.created'), key: 'created_at', width: COL.created,
+    // Образ задачи: во время обновления видно, какая задача на какой версии.
+    title: t('spec.image'), key: 'image', width: widths.value.image,
+    render: (row) => h('span', { class: 'one-line', title: row.image }, shortImageName(row.image)),
+  },
+  { title: t('nodes.message'), key: 'message', width: widths.value.message, ellipsis: { tooltip: true } },
+  {
+    title: t('services.created'), key: 'created_at', width: widths.value.created_at,
     render: (row) => new Date(row.created_at).toLocaleString(),
   },
 ])
@@ -160,7 +172,7 @@ const taskColumns = computed<DataTableColumns<ServiceTask>>(() => [
             <template #icon><n-icon :component="ArrowBackOutline" /></template>
           </n-button>
           <h2 class="title">{{ svc.name }}</h2>
-          <n-tag :bordered="false" :type="replicasType">
+          <n-tag :bordered="false" :type="replicasType" :title="replicasTitle">
             {{ svc.stopped ? t('services.stoppedTag') : `${svc.running}/${svc.desired}` }}
           </n-tag>
           <n-tag :bordered="false">{{ svc.mode }}</n-tag>
@@ -204,19 +216,23 @@ const taskColumns = computed<DataTableColumns<ServiceTask>>(() => [
             </n-statistic>
           </n-grid-item>
         </n-grid>
-        <UsageStats :usage="svc.usage" :running="svc.running" />
+        <UsageStats :usage="svc.usage" :running="svc.running" :no-data="svc.no_data" />
       </n-card>
 
       <!-- Задачи с историей и потреблением (3.4.4) -->
       <n-card :title="`${t('services.tasks')} (${svc.tasks.length})`" size="small" class="mb">
-        <n-data-table
-          :columns="taskColumns" :data="svc.tasks" size="small" :bordered="false"
-          :row-key="(r: ServiceTask) => r.id" :scroll-x="TASKS_MIN_WIDTH"
-        >
-          <template #empty>
-            <n-text depth="3">{{ svc.stopped ? t('services.noTasksStopped') : t('services.noTasks') }}</n-text>
-          </template>
-        </n-data-table>
+        <!-- Обёртка измеряется: по её ширине считаются ширины колонок -->
+        <div ref="wrapRef">
+          <n-data-table
+            class="live-table" table-layout="fixed"
+            :columns="taskColumns" :data="svc.tasks" size="small" :bordered="false"
+            :row-key="(r: ServiceTask) => r.id" :scroll-x="minWidth"
+          >
+            <template #empty>
+              <n-text depth="3">{{ svc.stopped ? t('services.noTasksStopped') : t('services.noTasks') }}</n-text>
+            </template>
+          </n-data-table>
+        </div>
       </n-card>
 
       <!-- Спецификация read-only (3.4.4) -->
@@ -315,9 +331,6 @@ const taskColumns = computed<DataTableColumns<ServiceTask>>(() => [
 }
 .clickable {
   cursor: pointer;
-}
-:deep(.row-link) {
-  color: inherit;
 }
 /* Подписи спецификации одной ширины — значения выстраиваются в колонку */
 :deep(.spec-label) {

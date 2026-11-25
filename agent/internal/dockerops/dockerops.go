@@ -6,6 +6,7 @@ package dockerops
 
 import (
 	"context"
+	"sync"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/build"
@@ -22,6 +23,17 @@ type Ops struct {
 	prevNet map[string]netSample
 	// pids — PID главного процесса контейнера на хосте (ключ — ID контейнера).
 	pids map[string]int
+	// memLimits — лимит памяти контейнера из его настроек, байты (0 — нет).
+	memLimits map[string]uint64
+	// warnedNoCgroup — предупреждение «cgroup не виден» уже записано в журнал.
+	warnedNoCgroup bool
+
+	// layerMu защищает layerCache: df запрашивают HTTP-обработчики, их
+	// может быть несколько одновременно.
+	layerMu sync.Mutex
+	// layerCache — слои образов по ID образа. Образ неизменяем, поэтому
+	// запись верна, пока образ существует (см. layersOf).
+	layerCache map[string]imageLayers
 }
 
 // New создаёт клиента к локальному docker.sock.
@@ -32,71 +44,17 @@ func New() (*Ops, error) {
 		return nil, err
 	}
 	return &Ops{
-		c:       c,
-		prevCPU: make(map[string]cpuSample),
-		prevNet: make(map[string]netSample),
-		pids:    make(map[string]int),
+		c:          c,
+		prevCPU:    make(map[string]cpuSample),
+		prevNet:    make(map[string]netSample),
+		pids:       make(map[string]int),
+		memLimits:  make(map[string]uint64),
+		layerCache: make(map[string]imageLayers),
 	}, nil
 }
 
 // Close освобождает ресурсы клиента.
 func (o *Ops) Close() error { return o.c.Close() }
-
-// DF — данные `docker system df` для ответа панели (3.11.1).
-type DF struct {
-	Images     DFSection `json:"images"`
-	Containers DFSection `json:"containers"`
-	Volumes    DFSection `json:"volumes"`
-	BuildCache DFSection `json:"build_cache"`
-}
-
-// DFSection — одна категория disk usage.
-type DFSection struct {
-	Count       int   `json:"count"`
-	Size        int64 `json:"size"`
-	Reclaimable int64 `json:"reclaimable"`
-}
-
-// DiskUsage собирает локальный system df.
-func (o *Ops) DiskUsage(ctx context.Context) (*DF, error) {
-	du, err := o.c.DiskUsage(ctx, types.DiskUsageOptions{})
-	if err != nil {
-		return nil, err
-	}
-	out := &DF{}
-	for _, img := range du.Images {
-		out.Images.Count++
-		out.Images.Size += img.Size
-		// Reclaimable: образ не используется контейнерами.
-		if img.Containers == 0 {
-			out.Images.Reclaimable += img.Size
-		}
-	}
-	for _, c := range du.Containers {
-		out.Containers.Count++
-		out.Containers.Size += c.SizeRw
-		if c.State != "running" {
-			out.Containers.Reclaimable += c.SizeRw
-		}
-	}
-	for _, v := range du.Volumes {
-		out.Volumes.Count++
-		if v.UsageData != nil {
-			out.Volumes.Size += v.UsageData.Size
-			if v.UsageData.RefCount == 0 {
-				out.Volumes.Reclaimable += v.UsageData.Size
-			}
-		}
-	}
-	for _, b := range du.BuildCache {
-		out.BuildCache.Count++
-		out.BuildCache.Size += b.Size
-		if !b.InUse {
-			out.BuildCache.Reclaimable += b.Size
-		}
-	}
-	return out, nil
-}
 
 // Volume — локальный том в ответе панели (3.10.4).
 type Volume struct {
@@ -138,15 +96,43 @@ type PruneResult struct {
 	Err            string `json:"err,omitempty"`
 }
 
+// orderTargets расставляет цели в порядке PruneOrder, в каком бы порядке их
+// ни прислали: оценка полной очистки (DF.Total) верна только для него.
+// Неизвестные цели идут в конец — Prune вернёт по ним ошибку.
+func orderTargets(targets []string) []string {
+	out := make([]string, 0, len(targets))
+	known := make(map[string]bool, len(PruneOrder))
+	for _, want := range PruneOrder {
+		known[want] = true
+		for _, t := range targets {
+			if t == want {
+				out = append(out, t)
+				break // повтор цели в запросе выполняется один раз
+			}
+		}
+	}
+	for _, t := range targets {
+		if !known[t] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // Prune выполняет очистку по списку целей (3.11.2).
-// Только неиспользуемое: dangling-образы (allImages — все без контейнеров),
-// остановленные контейнеры, неиспользуемые тома, build cache.
+// Только неиспользуемое — и ровно то, что обещает оценка DiskUsage (3.11.5):
+//   - images: образы без контейнеров и без тега (allImages — все без контейнеров);
+//   - containers: остановленные контейнеры;
+//   - volumes: неиспользуемые анонимные тома. Именованные не трогаем: у
+//     сервиса, остановленного через scale 0, контейнеров нет, и его том с
+//     данными выглядел бы «неиспользуемым»;
+//   - build-cache: кэш сборки, который сейчас не используется.
 func (o *Ops) Prune(ctx context.Context, targets []string, allImages bool) []PruneResult {
 	out := make([]PruneResult, 0, len(targets))
-	for _, target := range targets {
+	for _, target := range orderTargets(targets) {
 		res := PruneResult{Target: target}
 		switch target {
-		case "images":
+		case TargetImages:
 			f := filters.NewArgs(filters.Arg("dangling", "true"))
 			if allImages {
 				f = filters.NewArgs(filters.Arg("dangling", "false"))
@@ -156,19 +142,19 @@ func (o *Ops) Prune(ctx context.Context, targets []string, allImages bool) []Pru
 			} else {
 				res.SpaceReclaimed = rep.SpaceReclaimed
 			}
-		case "containers":
+		case TargetContainers:
 			if rep, err := o.c.ContainersPrune(ctx, filters.NewArgs()); err != nil {
 				res.Err = err.Error()
 			} else {
 				res.SpaceReclaimed = rep.SpaceReclaimed
 			}
-		case "volumes":
+		case TargetVolumes:
 			if rep, err := o.c.VolumesPrune(ctx, filters.NewArgs()); err != nil {
 				res.Err = err.Error()
 			} else {
 				res.SpaceReclaimed = rep.SpaceReclaimed
 			}
-		case "build-cache":
+		case TargetBuildCache:
 			if rep, err := o.c.BuildCachePrune(ctx, build.CachePruneOptions{}); err != nil {
 				res.Err = err.Error()
 			} else if rep != nil {

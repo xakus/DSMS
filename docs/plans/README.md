@@ -19,6 +19,7 @@
 | 12 | [stage-12-quality.md](stage-12-quality.md) | Тесты, golangci-lint/eslint, проверка размеров образов | ✅ готов |
 | 13 | [stage-13-docs-release.md](stage-13-docs-release.md) | Диаграммы, README/FAQ, LICENSE/CHANGELOG, приёмка, теги | ✅ кроме приёмки |
 | 14 | [stage-14-stack-control-service-usage.md](stage-14-stack-control-service-usage.md) | Stop/Start стека, страница стека, CPU/RAM/сеть сервисов, исправления по живой проверке | ✅ готов |
+| 15 | [stage-15-live-tables-honest-prune.md](stage-15-live-tables-honest-prune.md) | Таблицы без «прыжков», причины прочерков, честная оценка очистки дисков, «Очистить всё» | ✅ готов |
 
 **Все 8 этапов v1 и этапы 9–13 скоупа v2 выполнены.** Аудит 15.08.2026
 ([audit-2026-08-15.md](audit-2026-08-15.md)) собрал 32 находки — закрыты все,

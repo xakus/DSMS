@@ -85,4 +85,7 @@ type Snapshot struct {
 	// Tasks — потребление задач Swarm. Живёт только в TaskStats: ingest
 	// вырезает поле до записи в буфер, БД и рассылки (NFR-2a).
 	Tasks []Task `json:"tasks,omitempty"`
+	// TasksState — удалось ли агенту собрать метрики задач (TasksOK /
+	// TasksFailed); пусто у агентов до версии 2.3. Тоже только для TaskStats.
+	TasksState string `json:"tasks_state,omitempty"`
 }

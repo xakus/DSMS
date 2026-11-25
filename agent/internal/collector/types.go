@@ -82,4 +82,14 @@ type Snapshot struct {
 	Sys        Sys         `json:"sys"`
 	Containers []Container `json:"containers,omitempty"`
 	Tasks      []Task      `json:"tasks,omitempty"`
+	// TasksState — удалось ли собрать метрики задач: TasksOK или TasksFailed.
+	// Пустой список задач сам по себе ничего не значит: это и «на ноде нет
+	// задач», и «Docker не ответил». Агенты до версии 2.3 поля не шлют.
+	TasksState string `json:"tasks_state,omitempty"`
 }
+
+// Значения Snapshot.TasksState.
+const (
+	TasksOK     = "ok"     // Docker опрошен, список задач полный (может быть пустым)
+	TasksFailed = "failed" // Docker недоступен или не ответил за отведённое время
+)

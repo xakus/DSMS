@@ -45,6 +45,62 @@ type serviceView struct {
 	Nodes []string `json:"nodes"`
 	// Usage — суммарное потребление running-задач (3.4.7); nil — метрик нет.
 	Usage *usageView `json:"usage,omitempty"`
+	// NoData — по задачам на каких нодах метрик нет и почему (3.4.7).
+	NoData []noDataView `json:"no_data,omitempty"`
+}
+
+// Причины, по которым у работающей задачи нет метрик (ТЗ 3.4.7). UI
+// показывает их в подсказке у прочерка: понятно, что именно чинить.
+const (
+	noDataSilent   = "silent"   // агент ноды не присылает батчи
+	noDataOutdated = "outdated" // агент ноды старой версии: метрик задач не шлёт
+	noDataFailed   = "failed"   // агент ноды не смог опросить Docker
+	noDataUnseen   = "unseen"   // агент работает, но эту задачу не прислал
+)
+
+// noDataView — нода, с которой нет метрик задач сервиса, и причина.
+type noDataView struct {
+	Node   string `json:"node"`   // hostname (ID ноды, если имя неизвестно)
+	Reason string `json:"reason"` // одна из констант noData*
+}
+
+// noDataReason — почему у работающей задачи на ноде нет метрик.
+func noDataReason(agents map[string]metrics.AgentState, nodeID string) string {
+	switch agents[nodeID] {
+	case metrics.AgentOK:
+		// Агент присылает метрики, но не по этой задаче: контейнер только
+		// что запущен (первый замер ещё не ушёл) или агент его не видит.
+		return noDataUnseen
+	case metrics.AgentFailed:
+		return noDataFailed
+	case metrics.AgentOutdated:
+		return noDataOutdated
+	}
+	return noDataSilent
+}
+
+// noDataSet копит пары «нода — причина» без повторов.
+type noDataSet map[noDataView]bool
+
+// add запоминает, что с ноды нет метрик задачи.
+func (s noDataSet) add(node, reason string) { s[noDataView{Node: node, Reason: reason}] = true }
+
+// list возвращает пары по алфавиту нод; nil, если их нет.
+func (s noDataSet) list() []noDataView {
+	if len(s) == 0 {
+		return nil
+	}
+	out := make([]noDataView, 0, len(s))
+	for v := range s {
+		out = append(out, v)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Node != out[j].Node {
+			return out[i].Node < out[j].Node
+		}
+		return out[i].Reason < out[j].Reason
+	})
+	return out
 }
 
 // usageView — потребление ресурсов задачи, сервиса или стека (ТЗ 3.4.7).
@@ -118,6 +174,15 @@ func (h *handlers) taskMetrics() map[string]metrics.Task {
 	return h.TaskStats.ByTask()
 }
 
+// agentStates возвращает состояние агентов нод (причины прочерков).
+// Хранилище не подключено (тесты) — пустая карта: все агенты «молчат».
+func (h *handlers) agentStates() map[string]metrics.AgentState {
+	if h.TaskStats == nil {
+		return map[string]metrics.AgentState{}
+	}
+	return h.TaskStats.Agents()
+}
+
 // isRunning — задача реально работает и должна работать.
 func isRunning(t swarm.Task) bool {
 	return t.Status.State == swarm.TaskStateRunning && t.DesiredState == swarm.TaskStateRunning
@@ -158,9 +223,11 @@ func (h *handlers) loadServices(r *http.Request) ([]serviceView, []swarm.Service
 
 	// По running-задачам: счётчик, ноды размещения и потребление (3.4.7).
 	taskUsage := h.taskMetrics()
+	agents := h.agentStates()
 	running := map[string]int{}
 	placed := map[string]map[string]bool{} // service_id → множество hostname
 	usage := map[string]*usageAcc{}
+	noData := map[string]noDataSet{} // service_id → ноды без метрик
 	for _, t := range tasks {
 		if !isRunning(t) {
 			continue
@@ -169,12 +236,16 @@ func (h *handlers) loadServices(r *http.Request) ([]serviceView, []swarm.Service
 		if placed[t.ServiceID] == nil {
 			placed[t.ServiceID] = map[string]bool{}
 			usage[t.ServiceID] = &usageAcc{}
+			noData[t.ServiceID] = noDataSet{}
 		}
-		if hn := hostname[t.NodeID]; hn != "" {
+		hn := hostname[t.NodeID]
+		if hn != "" {
 			placed[t.ServiceID][hn] = true
 		}
 		if m, ok := taskUsage[t.ID]; ok {
 			usage[t.ServiceID].add(m)
+		} else {
+			noData[t.ServiceID].add(nodeLabel(hn, t.NodeID), noDataReason(agents, t.NodeID))
 		}
 	}
 
@@ -194,6 +265,7 @@ func (h *handlers) loadServices(r *http.Request) ([]serviceView, []swarm.Service
 		if acc := usage[s.ID]; acc != nil {
 			v.Usage = acc.view()
 		}
+		v.NoData = noData[s.ID].list()
 		if s.Spec.Mode.Replicated != nil {
 			v.Mode = "replicated"
 			v.Desired = replicasToInt(s.Spec.Mode.Replicated.Replicas)
@@ -215,6 +287,15 @@ func (h *handlers) loadServices(r *http.Request) ([]serviceView, []swarm.Service
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, services, nil
+}
+
+// nodeLabel — как назвать ноду пользователю: hostname, а если его нет
+// (нода удалена из кластера) — её ID.
+func nodeLabel(hostname, nodeID string) string {
+	if hostname != "" {
+		return hostname
+	}
+	return nodeID
 }
 
 // sortedKeys возвращает ключи множества по алфавиту; пустой срез вместо nil,
@@ -279,6 +360,8 @@ type taskView struct {
 	CreatedAt string `json:"created_at"`
 	// Usage — потребление running-задачи (3.4.7); nil — метрик нет.
 	Usage *usageView `json:"usage,omitempty"`
+	// NoData — почему у running-задачи нет метрик (константы noData*).
+	NoData string `json:"no_data,omitempty"`
 }
 
 // resourcesView — лимиты или резервы сервиса.
@@ -467,8 +550,10 @@ func (h *handlers) serviceDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	taskUsage := h.taskMetrics()
+	agents := h.agentStates()
 	total := &usageAcc{}
 	placed := map[string]bool{}
+	missing := noDataSet{}
 	running := 0
 	tv := make([]taskView, 0, len(tasks))
 	for _, t := range tasks {
@@ -499,6 +584,9 @@ func (h *handlers) serviceDetail(w http.ResponseWriter, r *http.Request) {
 				one.add(m)
 				item.Usage = one.view()
 				total.add(m)
+			} else {
+				item.NoData = noDataReason(agents, t.NodeID)
+				missing.add(nodeLabel(item.Node, t.NodeID), item.NoData)
 			}
 		}
 		tv = append(tv, item)
@@ -515,6 +603,7 @@ func (h *handlers) serviceDetail(w http.ResponseWriter, r *http.Request) {
 		"running":    running,
 		"nodes":      sortedKeys(placed),
 		"usage":      total.view(),
+		"no_data":    missing.list(),
 		"stopped":    false,
 		"created_at": svc.CreatedAt.Format(time.RFC3339),
 		"updated_at": svc.UpdatedAt.Format(time.RFC3339),

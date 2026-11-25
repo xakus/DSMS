@@ -110,6 +110,21 @@ export interface Usage {
   tasks: number
 }
 
+/**
+ * Почему у работающих задач на ноде нет метрик (ТЗ 3.4.7):
+ * silent — агент ноды не присылает батчи; outdated — агент старой версии;
+ * failed — агент не смог опросить Docker; unseen — агент работает, но эту
+ * задачу не прислал (она только что запущена).
+ */
+export type NoDataReason = 'silent' | 'outdated' | 'failed' | 'unseen'
+
+/** Нода, с которой нет метрик задач сервиса, и причина. */
+export interface NoData {
+  /** Hostname ноды (ID, если имя неизвестно). */
+  node: string
+  reason: NoDataReason
+}
+
 /** Сервис в таблице /services (3.4.1). */
 export interface ServiceInfo {
   id: string
@@ -126,6 +141,8 @@ export interface ServiceInfo {
   /** Hostname нод, где у сервиса есть running-задачи. */
   nodes: string[]
   usage?: Usage | null
+  /** С каких нод нет метрик и почему; поля нет — метрики есть по всем задачам. */
+  no_data?: NoData[]
 }
 
 /** Задача сервиса с историей (3.4.4). */
@@ -145,6 +162,8 @@ export interface ServiceTask {
   created_at: string
   /** Потребление running-задачи (3.4.7). */
   usage?: Usage | null
+  /** Почему у running-задачи нет метрик; поля нет — метрики есть. */
+  no_data?: NoDataReason
 }
 
 /** Лимиты или резервы сервиса. */
@@ -191,6 +210,8 @@ export interface ServiceDetail {
   stopped: boolean
   nodes: string[]
   usage?: Usage | null
+  /** С каких нод нет метрик и почему. */
+  no_data?: NoData[] | null
   created_at: string
   updated_at: string
   spec: ServiceSpec

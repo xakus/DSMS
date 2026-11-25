@@ -4,28 +4,27 @@
 //  - спиннер таблицы мигал на каждом опросе;
 //  - при недоступной панели тост об ошибке сыпался на каждый тик;
 //  - медленный ответ накладывался на следующий запрос.
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMessage } from 'naive-ui'
+import { useUiStore } from '../stores/ui'
 
 /**
- * Интервал опроса списков сервисов и стеков, мс. Агенты шлют метрики раз в
- * 1–30 с (по умолчанию 3 с): чаще 5 с цифры всё равно почти не меняются,
- * а каждый опрос — три запроса к Docker API на manager-ноде.
- */
-export const POLL_INTERVAL_MS = 5000
-
-/**
- * Вызывает fetcher сразу и далее каждые intervalMs.
+ * Вызывает fetcher сразу и далее с интервалом обновления из настроек.
  *
- * @param fetcher    загрузка данных; при ошибке должна бросить исключение
- * @param intervalMs интервал опроса, мс
+ * Интервал — тот же, с которым агенты шлют метрики (Настройки → «Интервал
+ * метрик», 1–30 с, по умолчанию 3 с). Опрашивать чаще бессмысленно: между
+ * батчами агентов цифры не меняются; реже — таблица отстаёт от кластера.
+ * Смена настройки применяется на лету.
+ *
+ * @param fetcher загрузка данных; при ошибке должна бросить исключение
  * @returns loading — true только до первого ответа (для спиннера);
  *          refresh — обновить сейчас (после действия пользователя)
  */
-export function usePolling(fetcher: () => Promise<void>, intervalMs = POLL_INTERVAL_MS) {
+export function usePolling(fetcher: () => Promise<void>) {
   const { t } = useI18n()
   const message = useMessage()
+  const ui = useUiStore()
 
   const loading = ref(true)
   let timer: number | null = null
@@ -57,13 +56,20 @@ export function usePolling(fetcher: () => Promise<void>, intervalMs = POLL_INTER
     }
   }
 
-  onMounted(() => {
-    void refresh()
+  /** Запустить таймер заново с текущим интервалом из настроек. */
+  function restart() {
+    if (timer) window.clearInterval(timer)
     timer = window.setInterval(() => {
       // Вкладка в фоне — кластер зря не дёргаем.
       if (!document.hidden) void refresh()
-    }, intervalMs)
+    }, ui.refreshMs)
+  }
+
+  onMounted(() => {
+    void refresh()
+    restart()
   })
+  watch(() => ui.refreshMs, restart)
   onBeforeUnmount(() => {
     if (timer) window.clearInterval(timer)
   })

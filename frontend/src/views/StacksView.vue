@@ -15,25 +15,31 @@ import AppLayout from '../components/AppLayout.vue'
 import StackDeployModal from '../components/StackDeployModal.vue'
 import StackRemoveModal from '../components/StackRemoveModal.vue'
 import { rowActions } from '../utils/actions'
-import { usageColumns, USAGE_COLS_WIDTH } from '../utils/usage'
+import { usageColumns, USAGE_COLUMN_SPECS } from '../utils/usage'
+import type { ColumnSpec } from '../utils/columns'
 import { stackStatus } from '../utils/stackOps'
 import { api } from '../api/client'
 import { usePolling } from '../composables/usePolling'
 import { useStackActions } from '../composables/useStackActions'
 import { useMediaQuery } from '../composables/useMediaQuery'
+import { useColumnWidths } from '../composables/useColumnWidths'
 import type { StackInfo } from '../types'
 
 /** Псевдо-стек для сервисов без стека: действий над ним нет (имя задаёт сервер). */
 const NO_STACK = '(no stack)'
 
 /**
- * Ширины колонок, px. Действий шесть: 6·28 + 5·6 + 24 (поля ячейки) = 222.
- * Вместе с потреблением таблица укладывается в 1280 px без прокрутки.
+ * Колонки: минимальная ширина, px, и доля лишней ширины экрана. Вместе с
+ * потреблением таблица укладывается в 1280 px без прокрутки.
+ * Действий шесть: 6·28 + 5·6 + 32 (поля ячейки) = 230 — колонка не растёт.
  */
-const COL = { name: 160, services: 100, replicas: 130, actions: 225 } as const
-
-/** Минимальная ширина таблицы: уже — прокрутка внутри карточки, а не страницы. */
-const TABLE_MIN_WIDTH = COL.name + COL.services + COL.replicas + USAGE_COLS_WIDTH + COL.actions
+const COLUMNS: ColumnSpec[] = [
+  { key: 'name', base: 160, grow: 2 },
+  { key: 'services', base: 100, grow: 1 },
+  { key: 'replicas', base: 130, grow: 1 },
+  ...USAGE_COLUMN_SPECS,
+  { key: 'actions', base: 230 },
+]
 
 /** С какой ширины экрана колонка действий закрепляется справа. */
 const PIN_ACTIONS_QUERY = '(min-width: 1024px)'
@@ -46,6 +52,8 @@ const { loading, refresh } = usePolling(async () => {
 })
 const actions = useStackActions(refresh)
 const pinActions = useMediaQuery(PIN_ACTIONS_QUERY)
+// Точные ширины колонок под текущий экран (таблица не «дышит» от цифр).
+const { wrapRef, widths, minWidth } = useColumnWidths(COLUMNS)
 
 // Модал деплоя из файла (FR-14): editName=null — новый стек, иначе правка.
 const deployShow = ref(false)
@@ -68,7 +76,7 @@ function applyRemove(name: string) {
 
 const columns = computed<DataTableColumns<StackInfo>>(() => [
   {
-    title: t('stacks.name'), key: 'name', minWidth: COL.name,
+    title: t('stacks.name'), key: 'name', width: widths.value.name,
     render: (row) => {
       // Псевдо-стек — просто подпись: страницы у него нет.
       if (row.name === NO_STACK) return t('stacks.noStack')
@@ -83,9 +91,9 @@ const columns = computed<DataTableColumns<StackInfo>>(() => [
       })
     },
   },
-  { title: t('stacks.services'), key: 'services', width: COL.services },
+  { title: t('stacks.services'), key: 'services', width: widths.value.services },
   {
-    title: t('services.replicas'), key: 'replicas', width: COL.replicas,
+    title: t('services.replicas'), key: 'replicas', width: widths.value.replicas,
     render: (row) => {
       const st = stackStatus(row)
       const text = st.label ? t(st.label) : `${row.running}/${row.desired}`
@@ -101,9 +109,9 @@ const columns = computed<DataTableColumns<StackInfo>>(() => [
       })
     },
   },
-  ...usageColumns<StackInfo>(t),
+  ...usageColumns<StackInfo>(t, widths.value),
   {
-    title: t('services.actions'), key: 'actions', width: COL.actions,
+    title: t('services.actions'), key: 'actions', width: widths.value.actions,
     fixed: pinActions.value ? 'right' : undefined,
     render: (row) => row.name === NO_STACK ? null :
       rowActions([
@@ -142,18 +150,22 @@ const columns = computed<DataTableColumns<StackInfo>>(() => [
           {{ t('stackDeploy.newButton') }}
         </n-button>
       </template>
-      <n-data-table
-        :columns="columns" :data="stacks" :loading="loading"
-        size="small" :bordered="false" :row-key="(r: StackInfo) => r.name"
-        :scroll-x="TABLE_MIN_WIDTH"
-      >
-        <template #empty>
-          <n-flex vertical align="center" :size="12">
-            <span>{{ t('stacks.empty') }}</span>
-            <n-button size="small" type="primary" @click="openDeployNew">{{ t('stackDeploy.newButton') }}</n-button>
-          </n-flex>
-        </template>
-      </n-data-table>
+      <!-- Обёртка измеряется: по её ширине считаются ширины колонок -->
+      <div ref="wrapRef">
+        <n-data-table
+          class="live-table" table-layout="fixed"
+          :columns="columns" :data="stacks" :loading="loading"
+          size="small" :bordered="false" :row-key="(r: StackInfo) => r.name"
+          :scroll-x="minWidth"
+        >
+          <template #empty>
+            <n-flex vertical align="center" :size="12">
+              <span>{{ t('stacks.empty') }}</span>
+              <n-button size="small" type="primary" @click="openDeployNew">{{ t('stackDeploy.newButton') }}</n-button>
+            </n-flex>
+          </template>
+        </n-data-table>
+      </div>
     </n-card>
 
     <!-- Деплой/правка стека из файла (FR-14) -->
@@ -165,10 +177,3 @@ const columns = computed<DataTableColumns<StackInfo>>(() => [
     <StackRemoveModal :stack="removeTarget" @close="removeTarget = null" @confirm="applyRemove" />
   </AppLayout>
 </template>
-
-<style scoped>
-/* Имя стека — ссылка на его страницу, цветом текста (как имена сервисов) */
-:deep(.row-link) {
-  color: inherit;
-}
-</style>

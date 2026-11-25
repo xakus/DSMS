@@ -5,21 +5,25 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NGrid, NGridItem, NStatistic, NText, NIcon, NFlex } from 'naive-ui'
 import { ArrowDownOutline, ArrowUpOutline, AlertCircleOutline } from '@vicons/ionicons5'
-import type { Usage } from '../types'
+import type { NoData, Usage } from '../types'
 import { fmtBps, fmtBytes, fmtCores } from '../utils/format'
-import { isPartial } from '../utils/usage'
+import { isPartial, noDataLines } from '../utils/usage'
 
 const props = defineProps<{
   usage?: Usage | null
   /** Сколько задач работает — чтобы предупредить о неполных данных. */
   running: number
+  /** С каких нод нет метрик и почему (у стека причин нет — они в таблице сервисов). */
+  noData?: NoData[] | null
 }>()
 
 const { t } = useI18n()
 
 const partial = computed(() => isPartial({ usage: props.usage, running: props.running }))
-/** Метрик нет вообще, хотя задачи работают: агент молчит или старой версии. */
+/** Метрик нет вообще, хотя задачи работают. */
 const missing = computed(() => !props.usage && props.running > 0)
+/** Причины по нодам: «нода: что случилось». */
+const reasons = computed(() => noDataLines({ no_data: props.noData ?? [] }, t))
 </script>
 
 <template>
@@ -61,13 +65,17 @@ const missing = computed(() => !props.usage && props.running > 0)
     <n-text depth="3" class="note">
       <template v-if="missing">
         <n-icon :component="AlertCircleOutline" :size="14" aria-hidden="true" />
-        {{ t('usage.missing') }}
+        {{ t('usage.noData.title') }}
       </template>
       <template v-else-if="partial">
         <n-icon :component="AlertCircleOutline" :size="14" aria-hidden="true" />
         {{ t('usage.partial', { got: usage?.tasks, total: running }) }}
       </template>
       <template v-else>{{ t('usage.cpuHint') }}</template>
+      <!-- Почему данных нет — по каждой ноде, чтобы было понятно, что чинить -->
+      <template v-if="missing || partial">
+        <span v-for="line in reasons" :key="line" class="reason">{{ line }}</span>
+      </template>
     </n-text>
   </div>
 </template>
@@ -86,5 +94,8 @@ const missing = computed(() => !props.usage && props.running > 0)
 }
 .note :deep(.n-icon) {
   vertical-align: -2px;
+}
+.reason {
+  display: block;
 }
 </style>

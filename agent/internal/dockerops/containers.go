@@ -2,7 +2,10 @@
 //
 // Список контейнеров — один вызов Docker API; счётчики CPU/RAM читаются
 // напрямую из /host/sys/fs/cgroup (быстро, без нагрузки на daemon).
-// Поддерживаются layout'ы: cgroup v2 (systemd и cgroupfs) и v1.
+// Поддерживаются layout'ы: cgroup v2 и v1, драйверы systemd и cgroupfs.
+// Если cgroup контейнера не виден (нестандартная раскладка, нет доступа к
+// /sys хоста) — те же цифры берутся у Docker (как `docker stats`): медленнее,
+// зато без прочерков в UI (см. stats.go).
 // CPU % считается как дельта usage между тиками относительно всех ядер.
 //
 // Для задач Swarm дополнительно собирается потребление по каждой задаче
@@ -60,6 +63,9 @@ const (
 	labelTask    = "com.docker.swarm.task.id"
 )
 
+// nsecPerUsec — наносекунд в микросекунде (счётчики CPU v1 и Docker — в нс).
+const nsecPerUsec = 1000
+
 // cpuSample — предыдущее показание CPU-счётчика контейнера.
 type cpuSample struct {
 	usageUsec uint64
@@ -74,13 +80,40 @@ func cgroupBase() string {
 	return "/sys/fs/cgroup"
 }
 
-// candidatePaths — возможные расположения cgroup контейнера по id.
+// candidatePaths — возможные расположения cgroup контейнера по id
+// (для v1 — в иерархии контроллера памяти).
 func candidatePaths(base, id string) []string {
+	scope := "docker-" + id + ".scope"
 	return []string{
-		filepath.Join(base, "system.slice", "docker-"+id+".scope"), // v2 + systemd
-		filepath.Join(base, "docker", id),                          // v2 + cgroupfs
-		filepath.Join(base, "memory", "docker", id),                // v1 (memory ctrl)
+		filepath.Join(base, "system.slice", scope),           // v2 + systemd
+		filepath.Join(base, "docker", id),                    // v2 + cgroupfs
+		filepath.Join(base, "memory", "docker", id),          // v1 + cgroupfs
+		filepath.Join(base, "memory", "system.slice", scope), // v1 + systemd
 	}
+}
+
+// findCgroup возвращает существующий cgroup-каталог контейнера или "".
+func findCgroup(base, id string) string {
+	for _, p := range candidatePaths(base, id) {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+// cpuacctPaths — где в cgroup v1 лежит счётчик CPU контейнера. Контроллер
+// называется cpuacct или «cpu,cpuacct» (зависит от дистрибутива).
+func cpuacctPaths(base, id string) []string {
+	scope := "docker-" + id + ".scope"
+	out := make([]string, 0, 4)
+	for _, ctrl := range []string{"cpuacct", "cpu,cpuacct"} {
+		out = append(out,
+			filepath.Join(base, ctrl, "docker", id, "cpuacct.usage"),
+			filepath.Join(base, ctrl, "system.slice", scope, "cpuacct.usage"),
+		)
+	}
+	return out
 }
 
 // readUint читает число из файла ("max" → 0 = безлимит).
@@ -113,8 +146,10 @@ func readCPUUsec(base, dir, id string) (uint64, bool) {
 		}
 	}
 	// v1: cpuacct.usage (наносекунды) в отдельной иерархии cpuacct
-	if v, ok := readUint(filepath.Join(base, "cpuacct", "docker", id, "cpuacct.usage")); ok {
-		return v / 1000, true
+	for _, p := range cpuacctPaths(base, id) {
+		if v, ok := readUint(p); ok {
+			return v / nsecPerUsec, true
+		}
 	}
 	return 0, false
 }
@@ -209,34 +244,27 @@ func (o *Ops) ContainerMetrics(ctx context.Context, topN int) (Usage, error) {
 			m.Name = strings.TrimPrefix(c.Names[0], "/")
 		}
 
-		// Найти живой cgroup-каталог контейнера.
-		var dir string
-		for _, p := range candidatePaths(base, c.ID) {
-			if _, err := os.Stat(p); err == nil {
-				dir = p
-				break
-			}
+		// Показания контейнера: из cgroup, а если его не видно — у Docker.
+		smp, ok := o.readSample(ctx, base, c.ID)
+		if !ok {
+			continue // контейнер исчез между списком и чтением (гонка со стопом)
 		}
-		if dir == "" {
-			continue // контейнер без видимого cgroup (гонка со стартом/стопом)
-		}
-
-		m.MemUsed, m.MemLimit = readMem(dir)
+		m.MemUsed, m.MemLimit = smp.memUsed, smp.memLimit
 
 		// CPU: дельта usage к прошлому тику. cores — сколько ядер занято;
 		// CPUPct — то же, но в процентах от всех ядер ноды.
 		// Пример: за 3 с контейнер наработал 1.5 с CPU-времени → 0.5 ядра;
 		// на 4-ядерной ноде это 12.5%.
 		var cores float64
-		if usec, ok := readCPUUsec(base, dir, c.ID); ok {
+		if smp.cpuOK {
 			if prev, exists := o.prevCPU[c.ID]; exists {
 				dt := now.Sub(prev.at).Seconds()
-				if dt > 0 && usec >= prev.usageUsec {
-					cores = float64(usec-prev.usageUsec) / 1e6 / dt
+				if dt > 0 && smp.cpuUsec >= prev.usageUsec {
+					cores = float64(smp.cpuUsec-prev.usageUsec) / 1e6 / dt
 					m.CPUPct = float64(int(cores/ncpu*1000+0.5)) / 10 // 1 знак
 				}
 			}
-			o.prevCPU[c.ID] = cpuSample{usageUsec: usec, at: now}
+			o.prevCPU[c.ID] = cpuSample{usageUsec: smp.cpuUsec, at: now}
 		}
 		out = append(out, m)
 

@@ -5,21 +5,24 @@ import { computed, h, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
-  NCard, NDataTable, NTag, NInput, NInputNumber, NFlex, NText, NIcon,
+  NCard, NDataTable, NInput, NInputNumber, NText,
   NModal, useMessage, useDialog,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import {
   PlayOutline, PauseOutline, RefreshOutline, ResizeOutline,
   PricetagOutline, ArrowUndoOutline, TrashOutline, DocumentTextOutline,
-  CloudDownloadOutline, SyncOutline,
+  CloudDownloadOutline,
 } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
 import { rowActions } from '../utils/actions'
-import { isUpdateNoteworthy, nameWithImage, nodesCell, usageColumns, USAGE_COLS_WIDTH } from '../utils/usage'
+import { nameWithImage, nodesCell, usageColumns, USAGE_COLUMN_SPECS } from '../utils/usage'
+import { replicasCell } from '../utils/replicas'
+import type { ColumnSpec } from '../utils/columns'
 import { api, ApiError } from '../api/client'
 import { usePolling } from '../composables/usePolling'
 import { useMediaQuery } from '../composables/useMediaQuery'
+import { useColumnWidths } from '../composables/useColumnWidths'
 import type { ServiceInfo } from '../types'
 
 /**
@@ -39,13 +42,25 @@ const ALL_ACTIONS_QUERY = '(min-width: 1440px)'
 const COMPACT_ACTIONS = 5
 
 /**
- * Ширины колонок, px. Кнопка действия — 28 px + зазор 6 px, поля ячейки — 24 px:
- * 8 кнопок = 8·28 + 7·6 + 24 = 290; 5 кнопок = 5·28 + 4·6 + 24 = 188.
+ * Колонки с данными: минимальная ширина, px, и доля лишней ширины экрана.
+ * На широком мониторе лишнее место делится между всеми колонками — раньше
+ * его целиком забирало «Имя», и данные прижимались к правому краю.
  */
-const COL = {
-  name: 180, replicas: 125, nodes: 135, stack: 110, ports: 130,
-  actionsFull: 290, actionsCompact: 190,
-} as const
+const DATA_COLUMNS: ColumnSpec[] = [
+  { key: 'name', base: 180, grow: 2 },
+  { key: 'replicas', base: 125, grow: 1 },
+  { key: 'nodes', base: 135, grow: 1.5 },
+  ...USAGE_COLUMN_SPECS,
+  { key: 'stack', base: 110, grow: 1 },
+  { key: 'ports', base: 130, grow: 1.5 },
+]
+
+/**
+ * Ширина колонки действий, px (не растёт). Кнопка — 28 px + зазор 6 px,
+ * поля ячейки — 32 px: 8 кнопок = 8·28 + 7·6 + 32 = 298; 5 кнопок = 5·28 + 4·6 + 32 = 196.
+ */
+const ACTIONS_WIDTH_FULL = 298
+const ACTIONS_WIDTH_COMPACT = 196
 
 const { t } = useI18n()
 const router = useRouter()
@@ -64,13 +79,14 @@ const { loading, refresh: load } = usePolling(async () => {
 const pinActions = useMediaQuery(PIN_ACTIONS_QUERY)
 const allActions = useMediaQuery(ALL_ACTIONS_QUERY)
 
-/** Ширина колонки действий под текущий экран. */
-const actionsWidth = computed(() => (allActions.value ? COL.actionsFull : COL.actionsCompact))
-
-/** Минимальная ширина таблицы: уже — прокрутка внутри карточки, а не страницы. */
-const tableMinWidth = computed(() =>
-  COL.name + COL.replicas + COL.nodes + USAGE_COLS_WIDTH + COL.stack + COL.ports + actionsWidth.value,
-)
+/** Все колонки таблицы; ширина действий зависит от числа видимых кнопок. */
+const columnSpecs = computed<ColumnSpec[]>(() => [
+  ...DATA_COLUMNS,
+  { key: 'actions', base: allActions.value ? ACTIONS_WIDTH_FULL : ACTIONS_WIDTH_COMPACT },
+])
+// widths — точная ширина каждой колонки под текущий экран; minWidth — уже
+// неё таблица прокручивается внутри карточки, а не страницы.
+const { wrapRef, widths, minWidth } = useColumnWidths(columnSpecs)
 
 // Модал Scale
 const scaleTarget = ref<ServiceInfo | null>(null)
@@ -176,29 +192,22 @@ function applyRemove() {
   run(() => api(`/services/${svc.id}`, { method: 'DELETE' }))
 }
 
-/** Цвет реплик: зелёный/красный (разд. 6.3); остановлен панелью — нейтральный. */
-function replicasType(svc: ServiceInfo): 'success' | 'error' | 'warning' | 'default' {
-  if (svc.stopped) return 'default'
-  if (svc.running >= svc.desired && svc.desired > 0) return 'success'
-  if (svc.running === 0 && svc.desired === 0) return 'warning'
-  return 'error'
-}
+/** Сколько портов показывать в ячейке; остальные — в подсказке. */
+const MAX_PORTS_SHOWN = 2
 
-/** Метка реплик: числа или «остановлен», плюс значок идущего обновления. */
-function replicasCell(row: ServiceInfo) {
-  const text = row.stopped ? t('services.stoppedTag') : `${row.running}/${row.desired}`
-  return h(NFlex, { align: 'center', size: 6 }, {
-    default: () => [
-      h(NTag, { size: 'small', bordered: false, type: replicasType(row) }, { default: () => text }),
-      row.mode === 'global'
-        ? h(NTag, { size: 'tiny', bordered: false }, { default: () => 'global' })
-        : null,
-      isUpdateNoteworthy(row.update_state)
-        ? h(NIcon, { size: 16, title: row.update_state, 'aria-label': row.update_state },
-            { default: () => h(SyncOutline) })
-        : null,
-    ],
-  })
+/**
+ * Ячейка «Порты»: не больше двух строк (высота строки таблицы постоянна).
+ * Портов больше двух — первый и «ещё N», полный список — в подсказке.
+ */
+function portsCell(ports: string[] | undefined) {
+  const list = ports ?? []
+  if (list.length === 0) return '—'
+  const line = (p: string) => h('div', { key: p, class: 'one-line' }, p)
+  if (list.length <= MAX_PORTS_SHOWN) return h('div', { title: list.join(', ') }, list.map(line))
+  return h('div', { title: list.join(', ') }, [
+    line(list[0]),
+    h(NText, { depth: 3 }, { default: () => t('usage.moreNodes', { count: list.length - 1 }) }),
+  ])
 }
 
 // Порядок колонок — по важности: что работает, где и сколько ест. Стек и
@@ -206,25 +215,25 @@ function replicasCell(row: ServiceInfo) {
 const columns = computed<DataTableColumns<ServiceInfo>>(() => [
   {
     // Имя и образ в одной ячейке: образ — второстепенная строка под именем.
-    title: t('services.name'), key: 'name', minWidth: COL.name,
+    title: t('services.name'), key: 'name', width: widths.value.name,
     sorter: (a, b) => a.name.localeCompare(b.name),
     render: (row) => nameWithImage(
-      h(RouterLink, { to: { name: 'service', params: { id: row.id } }, class: 'svc-link' }, { default: () => row.name }),
+      h(RouterLink, { to: { name: 'service', params: { id: row.id } }, class: 'row-link', title: row.name }, { default: () => row.name }),
       row.image,
     ),
   },
-  { title: t('services.replicas'), key: 'replicas', width: COL.replicas, render: replicasCell },
-  { title: t('services.nodes'), key: 'nodes', width: COL.nodes, render: (row) => nodesCell(row.nodes) },
-  ...usageColumns<ServiceInfo>(t),
+  { title: t('services.replicas'), key: 'replicas', width: widths.value.replicas, render: (row) => replicasCell(row, t) },
+  { title: t('services.nodes'), key: 'nodes', width: widths.value.nodes, render: (row) => nodesCell(row.nodes, t) },
+  ...usageColumns<ServiceInfo>(t, widths.value),
   {
-    title: t('services.stack'), key: 'stack', width: COL.stack,
+    title: t('services.stack'), key: 'stack', width: widths.value.stack,
     render: (row) => row.stack
-      ? h(RouterLink, { to: { name: 'stack', params: { name: row.stack } }, class: 'svc-link' }, { default: () => row.stack })
+      ? h(RouterLink, { to: { name: 'stack', params: { name: row.stack } }, class: 'row-link one-line', title: row.stack }, { default: () => row.stack })
       : '—',
   },
-  { title: t('services.ports'), key: 'ports', width: COL.ports, render: (row) => (row.ports ?? []).join(', ') || '—' },
+  { title: t('services.ports'), key: 'ports', width: widths.value.ports, render: (row) => portsCell(row.ports) },
   {
-    title: t('services.actions'), key: 'actions', width: actionsWidth.value,
+    title: t('services.actions'), key: 'actions', width: widths.value.actions,
     fixed: pinActions.value ? 'right' : undefined,
     render: (row) =>
       // Частые действия — первыми: в компактном режиме остальные уходят в «ещё».
@@ -247,15 +256,19 @@ const columns = computed<DataTableColumns<ServiceInfo>>(() => [
 <template>
   <AppLayout>
     <n-card :title="t('nav.services')" size="small">
-      <n-data-table
-        :columns="columns" :data="services" :loading="loading"
-        size="small" :bordered="false" :row-key="(r: ServiceInfo) => r.id"
-        :scroll-x="tableMinWidth"
-      >
-        <template #empty>
-          <n-text depth="3">{{ t('services.empty') }}</n-text>
-        </template>
-      </n-data-table>
+      <!-- Обёртка измеряется: по её ширине считаются ширины колонок -->
+      <div ref="wrapRef">
+        <n-data-table
+          class="live-table" table-layout="fixed"
+          :columns="columns" :data="services" :loading="loading"
+          size="small" :bordered="false" :row-key="(r: ServiceInfo) => r.id"
+          :scroll-x="minWidth"
+        >
+          <template #empty>
+            <n-text depth="3">{{ t('services.empty') }}</n-text>
+          </template>
+        </n-data-table>
+      </div>
     </n-card>
 
     <!-- Scale -->
@@ -287,17 +300,5 @@ const columns = computed<DataTableColumns<ServiceInfo>>(() => [
 /* Полноширинные контролы модалов */
 .w100 {
   width: 100%;
-}
-:deep(.svc-link) {
-  color: inherit;
-}
-/* Образ под именем сервиса — второстепенная строка в одну линию:
-   не влез — многоточие, полное имя — в подсказке */
-:deep(.sub) {
-  display: block;
-  font-size: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 </style>

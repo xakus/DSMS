@@ -17,21 +17,26 @@ import AppLayout from '../components/AppLayout.vue'
 import StackDeployModal from '../components/StackDeployModal.vue'
 import StackRemoveModal from '../components/StackRemoveModal.vue'
 import UsageStats from '../components/UsageStats.vue'
-import { nameWithImage, nodesCell, usageColumns, USAGE_COLS_WIDTH } from '../utils/usage'
+import { nameWithImage, nodesCell, usageColumns, USAGE_COLUMN_SPECS } from '../utils/usage'
+import { replicasCell } from '../utils/replicas'
+import type { ColumnSpec } from '../utils/columns'
 import { stackStatus } from '../utils/stackOps'
 import { api, ApiError } from '../api/client'
 import { usePolling } from '../composables/usePolling'
 import { stackPath, useStackActions } from '../composables/useStackActions'
+import { useColumnWidths } from '../composables/useColumnWidths'
 import type { ServiceInfo, StackDetail, StackResource } from '../types'
 
 /** HTTP-статус «стека нет». */
 const HTTP_NOT_FOUND = 404
 
-/** Ширины колонок таблицы сервисов, px. */
-const COL = { name: 200, replicas: 125, nodes: 135 } as const
-
-/** Минимальная ширина таблицы: уже — прокрутка внутри карточки, а не страницы. */
-const TABLE_MIN_WIDTH = COL.name + COL.replicas + COL.nodes + USAGE_COLS_WIDTH
+/** Колонки таблицы сервисов: минимальная ширина, px, и доля лишней ширины. */
+const COLUMNS: ColumnSpec[] = [
+  { key: 'name', base: 200, grow: 2 },
+  { key: 'replicas', base: 125, grow: 1 },
+  { key: 'nodes', base: 135, grow: 1.5 },
+  ...USAGE_COLUMN_SPECS,
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -57,6 +62,8 @@ const { loading, refresh } = usePolling(async () => {
   }
 })
 const actions = useStackActions(refresh)
+// Точные ширины колонок под текущий экран (таблица не «дышит» от цифр).
+const { wrapRef, widths, minWidth } = useColumnWidths(COLUMNS)
 
 const deployShow = ref(false)
 const removeShow = ref(false)
@@ -77,30 +84,18 @@ const statusText = computed(() => {
   return status.value.label ? t(status.value.label) : `${stack.value.running}/${stack.value.desired}`
 })
 
-/** Цвет реплик сервиса — как в таблице сервисов. */
-function replicasType(svc: ServiceInfo): 'success' | 'error' | 'warning' | 'default' {
-  if (svc.stopped) return 'default'
-  if (svc.running >= svc.desired && svc.desired > 0) return 'success'
-  if (svc.running === 0 && svc.desired === 0) return 'warning'
-  return 'error'
-}
-
 const columns = computed<DataTableColumns<ServiceInfo>>(() => [
   {
-    title: t('services.name'), key: 'name', minWidth: COL.name,
+    title: t('services.name'), key: 'name', width: widths.value.name,
     render: (row) => nameWithImage(
-      h(RouterLink, { to: { name: 'service', params: { id: row.id } }, class: 'row-link' },
+      h(RouterLink, { to: { name: 'service', params: { id: row.id } }, class: 'row-link', title: row.name },
         { default: () => row.name }),
       row.image,
     ),
   },
-  {
-    title: t('services.replicas'), key: 'replicas', width: COL.replicas,
-    render: (row) => h(NTag, { size: 'small', bordered: false, type: replicasType(row) },
-      { default: () => row.stopped ? t('services.stoppedTag') : `${row.running}/${row.desired}` }),
-  },
-  { title: t('services.nodes'), key: 'nodes', width: COL.nodes, render: (row) => nodesCell(row.nodes) },
-  ...usageColumns<ServiceInfo>(t),
+  { title: t('services.replicas'), key: 'replicas', width: widths.value.replicas, render: (row) => replicasCell(row, t) },
+  { title: t('services.nodes'), key: 'nodes', width: widths.value.nodes, render: (row) => nodesCell(row.nodes, t) },
+  ...usageColumns<ServiceInfo>(t, widths.value),
 ])
 
 /** Группы ресурсов для карточки «Ресурсы стека». */
@@ -190,14 +185,18 @@ const resources = computed(() => {
 
       <!-- Сервисы стека -->
       <n-card :title="`${t('stacks.services')} (${stack.services.length})`" size="small" class="mb">
-        <n-data-table
-          :columns="columns" :data="stack.services" size="small" :bordered="false"
-          :row-key="(r: ServiceInfo) => r.id" :scroll-x="TABLE_MIN_WIDTH"
-        >
-          <template #empty>
-            <n-text depth="3">{{ stack.managed ? t('stacks.noServicesManaged') : t('stacks.noServices') }}</n-text>
-          </template>
-        </n-data-table>
+        <!-- Обёртка измеряется: по её ширине считаются ширины колонок -->
+        <div ref="wrapRef">
+          <n-data-table
+            class="live-table" table-layout="fixed"
+            :columns="columns" :data="stack.services" size="small" :bordered="false"
+            :row-key="(r: ServiceInfo) => r.id" :scroll-x="minWidth"
+          >
+            <template #empty>
+              <n-text depth="3">{{ stack.managed ? t('stacks.noServicesManaged') : t('stacks.noServices') }}</n-text>
+            </template>
+          </n-data-table>
+        </div>
       </n-card>
 
       <!-- Ресурсы стека: сети, тома, секреты, конфиги (3.8.2) -->
@@ -239,17 +238,5 @@ const resources = computed(() => {
 }
 .hint {
   font-size: 14px;
-}
-:deep(.row-link) {
-  color: inherit;
-}
-/* Образ под именем сервиса — второстепенная строка в одну линию:
-   не влез — многоточие, полное имя — в подсказке */
-:deep(.sub) {
-  display: block;
-  font-size: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 </style>
