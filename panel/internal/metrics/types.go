@@ -58,6 +58,19 @@ type Container struct {
 	MemLimit uint64  `json:"mem_limit"`
 }
 
+// Task — потребление одной задачи Swarm (FR-04 3.4.7, поле `tasks` батча).
+// В отличие от Container приходит по ВСЕМ задачам ноды, без отсечки топ-N.
+type Task struct {
+	Task string `json:"task"` // ID задачи Swarm
+	// CPUCores — занято ядер: 0.35 = 35% одного ядра (как в `docker stats`).
+	// Не нормировано на ядра ноды — значения с разных нод складываются.
+	CPUCores float64 `json:"cpu_cores"`
+	MemUsed  uint64  `json:"mem_used"`  // байты, без неактивного файлового кэша
+	MemLimit uint64  `json:"mem_limit"` // байты; 0 — без лимита
+	RxBps    uint64  `json:"rx_bps"`    // приём, байт/с
+	TxBps    uint64  `json:"tx_bps"`    // отдача, байт/с
+}
+
 // Snapshot — один батч метрик от агента (POST /api/v1/ingest, разд. 4.3).
 type Snapshot struct {
 	NodeID     string      `json:"node_id"`
@@ -69,4 +82,7 @@ type Snapshot struct {
 	Net        []Net       `json:"net"`
 	Sys        Sys         `json:"sys"`
 	Containers []Container `json:"containers,omitempty"`
+	// Tasks — потребление задач Swarm. Живёт только в TaskStats: ingest
+	// вырезает поле до записи в буфер, БД и рассылки (NFR-2a).
+	Tasks []Task `json:"tasks,omitempty"`
 }

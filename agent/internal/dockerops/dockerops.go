@@ -18,6 +18,10 @@ type Ops struct {
 	c *client.Client
 	// prevCPU — предыдущие CPU-счётчики контейнеров (для расчёта дельт).
 	prevCPU map[string]cpuSample
+	// prevNet — предыдущие сетевые счётчики контейнеров задач Swarm.
+	prevNet map[string]netSample
+	// pids — PID главного процесса контейнера на хосте (ключ — ID контейнера).
+	pids map[string]int
 }
 
 // New создаёт клиента к локальному docker.sock.
@@ -27,7 +31,12 @@ func New() (*Ops, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Ops{c: c, prevCPU: make(map[string]cpuSample)}, nil
+	return &Ops{
+		c:       c,
+		prevCPU: make(map[string]cpuSample),
+		prevNet: make(map[string]netSample),
+		pids:    make(map[string]int),
+	}, nil
 }
 
 // Close освобождает ресурсы клиента.

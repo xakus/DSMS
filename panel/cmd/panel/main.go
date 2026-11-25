@@ -138,6 +138,8 @@ func main() {
 		Agents:      agentclient.NewDirectory(),
 		AgentClient: agentclient.New(cfg.AgentToken, ""),
 		Alerts:      engine,
+		// Потребление задач Swarm: последнее значение по ноде, в памяти (3.4.7).
+		TaskStats: metrics.NewTaskStats(metrics.TaskStatsTTL),
 	})
 
 	srv := &http.Server{
@@ -158,16 +160,21 @@ func main() {
 
 	// Лента Docker events → WS "events" (FR-06) + алерт task_failed (FR-12).
 	go streams.RunEvents(ctx, docker, hub, func(m events.Message) {
-		if m.Type == "container" && m.Action == "die" {
-			if code := m.Actor.Attributes["exitCode"]; code != "" && code != "0" {
-				name := m.Actor.Attributes["com.docker.swarm.task.name"]
-				if name == "" {
-					name = m.Actor.Attributes["name"]
-				}
-				engine.Event("task_failed", "warning", "task", name,
-					"task "+name+" exited with code "+code)
-			}
+		death, ok := streams.ParseDeath(m)
+		if !ok {
+			return
 		}
+		// Проверка ждёт, пока Swarm запишет итог задачи, — в своей горутине,
+		// чтобы не тормозить ленту событий.
+		go func() {
+			// Штатная остановка (Stop, деплой, scale-down) тоже убивает
+			// контейнер с ненулевым кодом — алертим только настоящее падение.
+			if !streams.IsRealFailure(ctx, docker, death, streams.TaskSettleDelay) {
+				return
+			}
+			engine.Event("task_failed", "warning", "task", death.Name,
+				"task "+death.Name+" exited with code "+death.ExitCode)
+		}()
 	})
 
 	go func() {

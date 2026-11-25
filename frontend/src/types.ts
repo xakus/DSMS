@@ -91,6 +91,25 @@ export interface ClusterSummary {
   services: number
 }
 
+/**
+ * Потребление ресурсов задачи, сервиса или стека (ТЗ 3.4.7).
+ * Поля нет в ответе (undefined/null) — метрик нет: в UI прочерк, а не ноль.
+ */
+export interface Usage {
+  /** Занято ядер: 0.35 = 35% одного ядра (как в `docker stats`). */
+  cpu_cores: number
+  /** Память, байты (без неактивного файлового кэша). */
+  mem_used: number
+  /** Сумма лимитов памяти, байты; 0 — лимита нет (или есть не у всех задач). */
+  mem_limit: number
+  /** Скорость приёма, байт/с. */
+  rx_bps: number
+  /** Скорость отдачи, байт/с. */
+  tx_bps: number
+  /** Сколько running-задач дали метрики; меньше running — сумма неполная. */
+  tasks: number
+}
+
 /** Сервис в таблице /services (3.4.1). */
 export interface ServiceInfo {
   id: string
@@ -104,18 +123,60 @@ export interface ServiceInfo {
   labels: Record<string, string>
   update_state?: string
   stopped: boolean
+  /** Hostname нод, где у сервиса есть running-задачи. */
+  nodes: string[]
+  usage?: Usage | null
 }
 
 /** Задача сервиса с историей (3.4.4). */
 export interface ServiceTask {
   id: string
   slot: number
+  /** Hostname ноды. */
   node: string
+  /** ID ноды — для ссылки на её страницу. */
+  node_id: string
   state: string
   desired: string
   message: string
+  /** Образ задачи: при обновлении видно, кто на какой версии. */
+  image: string
   exit_code?: number
   created_at: string
+  /** Потребление running-задачи (3.4.7). */
+  usage?: Usage | null
+}
+
+/** Лимиты или резервы сервиса. */
+export interface ServiceResources {
+  /** Ядра; 0 — не задано. */
+  cpus: number
+  /** Байты; 0 — не задано. */
+  memory: number
+}
+
+/** Спецификация сервиса read-only (3.4.4). */
+export interface ServiceSpec {
+  image: string
+  /** sha256, в который разрешился тег. */
+  digest?: string
+  command: string[]
+  args: string[]
+  env: string[]
+  mounts: string[]
+  networks: string[]
+  ports: string[]
+  constraints: string[]
+  secrets: string[]
+  configs: string[]
+  labels?: Record<string, string>
+  limits?: ServiceResources
+  reservations?: ServiceResources
+  restart?: { condition: string; delay_sec: number; max_attempts: number }
+  update_config?: { parallelism: number; delay_sec: number; order: string; failure_action: string }
+  healthcheck: string[]
+  user?: string
+  hostname?: string
 }
 
 /** Детали сервиса (/services/{id}). */
@@ -123,15 +184,16 @@ export interface ServiceDetail {
   id: string
   name: string
   stack: string
-  mode: string
-  spec: {
-    image: string
-    env?: string[]
-    mounts?: string[]
-    constraints?: string[]
-    labels?: Record<string, string>
-    limits?: { cpus?: number; memory?: number }
-  }
+  mode: 'replicated' | 'global'
+  running: number
+  desired: number
+  /** Остановлен панелью (scale 0 с запомненными репликами). */
+  stopped: boolean
+  nodes: string[]
+  usage?: Usage | null
+  created_at: string
+  updated_at: string
+  spec: ServiceSpec
   tasks: ServiceTask[]
   update?: { state: string; message: string } | null
 }
@@ -143,6 +205,47 @@ export interface StackInfo {
   running: number
   desired: number
   managed?: boolean // развёрнут из файла (FR-14): есть сохранённый исходник
+  /** Сколько сервисов остановлено панелью (их вернёт «Запустить»). */
+  stopped: number
+  /** Сколько сервисов можно остановить (replicated с репликами > 0). */
+  stoppable: number
+  usage?: Usage | null
+}
+
+/** Сеть/secret/config, задействованный стеком (3.8.2). */
+export interface StackResource {
+  name: string
+  /** Объект не принадлежит стеку: при удалении стека останется. */
+  external: boolean
+}
+
+/** Страница стека (GET /stacks/{name}, 3.8.2). */
+export interface StackDetail {
+  name: string
+  managed: boolean
+  running: number
+  desired: number
+  stopped: number
+  stoppable: number
+  usage?: Usage | null
+  services: ServiceInfo[]
+  networks: StackResource[]
+  secrets: StackResource[]
+  configs: StackResource[]
+  volumes: string[]
+}
+
+/** Причина пропуска сервиса в групповой операции (ТЗ 3.8.6). */
+export type StackSkipReason = 'global' | 'already_stopped' | 'not_stopped'
+
+/** Сводка групповой операции над стеком (ТЗ 3.8.6). */
+export interface StackOpResult {
+  /** Сервисы, над которыми действие выполнено. */
+  done: string[]
+  skipped: { name: string; reason: StackSkipReason }[]
+  failed: { name: string; error: string }[]
+  /** Удалённые сети/secrets/configs (только при удалении стека). */
+  resources: string[]
 }
 
 /** Превью валидации стека (POST /stacks/validate). */

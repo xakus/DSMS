@@ -1,24 +1,51 @@
 <script setup lang="ts">
-// Таблица сервисов (FR-04 3.4.1–3.4.3): группировка по стекам,
-// цветовая индикация реплик, быстрые действия в строке.
+// Таблица сервисов (FR-04 3.4.1–3.4.3, 3.4.7): стек, реплики с цветовой
+// индикацией, ноды размещения, потребление (CPU, RAM, сеть), быстрые действия.
 import { computed, h, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
-  NCard, NDataTable, NTag, NInput, NInputNumber,
+  NCard, NDataTable, NTag, NInput, NInputNumber, NFlex, NText, NIcon,
   NModal, useMessage, useDialog,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import {
   PlayOutline, PauseOutline, RefreshOutline, ResizeOutline,
   PricetagOutline, ArrowUndoOutline, TrashOutline, DocumentTextOutline,
-  CloudDownloadOutline,
+  CloudDownloadOutline, SyncOutline,
 } from '@vicons/ionicons5'
-import { onBeforeUnmount, onMounted } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import { rowActions } from '../utils/actions'
+import { isUpdateNoteworthy, nameWithImage, nodesCell, usageColumns, USAGE_COLS_WIDTH } from '../utils/usage'
 import { api, ApiError } from '../api/client'
+import { usePolling } from '../composables/usePolling'
+import { useMediaQuery } from '../composables/useMediaQuery'
 import type { ServiceInfo } from '../types'
+
+/**
+ * С какой ширины экрана колонка действий закрепляется справа. На узком
+ * экране закреплённая колонка заняла бы всю ширину и закрыла данные.
+ */
+const PIN_ACTIONS_QUERY = '(min-width: 1024px)'
+
+/**
+ * С какой ширины экрана показываются все 8 кнопок действий. Уже — редкие
+ * действия уходят в меню «ещё»: иначе на ноутбуке (1280–1366 px) кнопки
+ * вытесняли колонки CPU/RAM/Сеть за горизонтальную прокрутку.
+ */
+const ALL_ACTIONS_QUERY = '(min-width: 1440px)'
+
+/** Сколько кнопок действий в компактном режиме (последняя — меню «ещё»). */
+const COMPACT_ACTIONS = 5
+
+/**
+ * Ширины колонок, px. Кнопка действия — 28 px + зазор 6 px, поля ячейки — 24 px:
+ * 8 кнопок = 8·28 + 7·6 + 24 = 290; 5 кнопок = 5·28 + 4·6 + 24 = 188.
+ */
+const COL = {
+  name: 180, replicas: 125, nodes: 135, stack: 110, ports: 130,
+  actionsFull: 290, actionsCompact: 190,
+} as const
 
 const { t } = useI18n()
 const router = useRouter()
@@ -31,7 +58,19 @@ function goLogs(svc: ServiceInfo) {
 }
 
 const services = ref<ServiceInfo[]>([])
-const loading = ref(false)
+const { loading, refresh: load } = usePolling(async () => {
+  services.value = await api<ServiceInfo[]>('/services')
+})
+const pinActions = useMediaQuery(PIN_ACTIONS_QUERY)
+const allActions = useMediaQuery(ALL_ACTIONS_QUERY)
+
+/** Ширина колонки действий под текущий экран. */
+const actionsWidth = computed(() => (allActions.value ? COL.actionsFull : COL.actionsCompact))
+
+/** Минимальная ширина таблицы: уже — прокрутка внутри карточки, а не страницы. */
+const tableMinWidth = computed(() =>
+  COL.name + COL.replicas + COL.nodes + USAGE_COLS_WIDTH + COL.stack + COL.ports + actionsWidth.value,
+)
 
 // Модал Scale
 const scaleTarget = ref<ServiceInfo | null>(null)
@@ -43,36 +82,15 @@ const imageValue = ref('')
 const removeTarget = ref<ServiceInfo | null>(null)
 const removeConfirmName = ref('')
 
-/** Загрузить список сервисов. */
-async function load() {
-  loading.value = true
-  try {
-    services.value = await api<ServiceInfo[]>('/services')
-  } catch {
-    message.error(t('common.loadFailed'))
-  } finally {
-    loading.value = false
-  }
-}
-
-// Список сервисов обновляется на фиксированном интервале.
-let timer: number | null = null
-onMounted(() => {
-  load()
-  timer = window.setInterval(load, 10000)
-})
-onBeforeUnmount(() => {
-  if (timer) window.clearInterval(timer)
-})
-
 /** Выполнить действие с обновлением списка и обработкой ошибок. */
-async function run(action: () => Promise<unknown>, okMsg = 'OK') {
+async function run(action: () => Promise<unknown>) {
   try {
     await action()
-    message.success(okMsg)
-    await load()
+    message.success(t('common.done'))
   } catch (e) {
-    message.error(e instanceof ApiError ? e.message : 'error')
+    message.error(e instanceof ApiError ? e.message : t('common.error'))
+  } finally {
+    await load()
   }
 }
 
@@ -158,43 +176,70 @@ function applyRemove() {
   run(() => api(`/services/${svc.id}`, { method: 'DELETE' }))
 }
 
-/** Цвет реплик: зелёный/красный (разд. 6.3). */
-function replicasType(svc: ServiceInfo): 'success' | 'error' | 'warning' {
+/** Цвет реплик: зелёный/красный (разд. 6.3); остановлен панелью — нейтральный. */
+function replicasType(svc: ServiceInfo): 'success' | 'error' | 'warning' | 'default' {
+  if (svc.stopped) return 'default'
   if (svc.running >= svc.desired && svc.desired > 0) return 'success'
   if (svc.running === 0 && svc.desired === 0) return 'warning'
   return 'error'
 }
 
+/** Метка реплик: числа или «остановлен», плюс значок идущего обновления. */
+function replicasCell(row: ServiceInfo) {
+  const text = row.stopped ? t('services.stoppedTag') : `${row.running}/${row.desired}`
+  return h(NFlex, { align: 'center', size: 6 }, {
+    default: () => [
+      h(NTag, { size: 'small', bordered: false, type: replicasType(row) }, { default: () => text }),
+      row.mode === 'global'
+        ? h(NTag, { size: 'tiny', bordered: false }, { default: () => 'global' })
+        : null,
+      isUpdateNoteworthy(row.update_state)
+        ? h(NIcon, { size: 16, title: row.update_state, 'aria-label': row.update_state },
+            { default: () => h(SyncOutline) })
+        : null,
+    ],
+  })
+}
+
+// Порядок колонок — по важности: что работает, где и сколько ест. Стек и
+// порты — в конце: на ноутбуке они уходят в прокрутку, главное остаётся видно.
 const columns = computed<DataTableColumns<ServiceInfo>>(() => [
   {
-    title: t('services.name'), key: 'name',
-    render: (row) => h(RouterLink, { to: { name: 'service', params: { id: row.id } }, class: 'svc-link' }, { default: () => row.name }),
+    // Имя и образ в одной ячейке: образ — второстепенная строка под именем.
+    title: t('services.name'), key: 'name', minWidth: COL.name,
+    sorter: (a, b) => a.name.localeCompare(b.name),
+    render: (row) => nameWithImage(
+      h(RouterLink, { to: { name: 'service', params: { id: row.id } }, class: 'svc-link' }, { default: () => row.name }),
+      row.image,
+    ),
   },
-  { title: t('services.stack'), key: 'stack', render: (row) => row.stack || '—' },
-  { title: 'Image', key: 'image', ellipsis: true },
-  { title: 'Mode', key: 'mode', width: 100 },
+  { title: t('services.replicas'), key: 'replicas', width: COL.replicas, render: replicasCell },
+  { title: t('services.nodes'), key: 'nodes', width: COL.nodes, render: (row) => nodesCell(row.nodes) },
+  ...usageColumns<ServiceInfo>(t),
   {
-    title: t('services.replicas'), key: 'replicas', width: 110,
-    render: (row) =>
-      h(NTag, { size: 'small', bordered: false, type: replicasType(row) },
-        { default: () => `${row.running}/${row.desired}${row.update_state ? ' ⟳' : ''}` }),
+    title: t('services.stack'), key: 'stack', width: COL.stack,
+    render: (row) => row.stack
+      ? h(RouterLink, { to: { name: 'stack', params: { name: row.stack } }, class: 'svc-link' }, { default: () => row.stack })
+      : '—',
   },
-  { title: t('services.ports'), key: 'ports', render: (row) => (row.ports ?? []).join(', ') || '—' },
+  { title: t('services.ports'), key: 'ports', width: COL.ports, render: (row) => (row.ports ?? []).join(', ') || '—' },
   {
-    title: t('services.actions'), key: 'actions', width: 320,
+    title: t('services.actions'), key: 'actions', width: actionsWidth.value,
+    fixed: pinActions.value ? 'right' : undefined,
     render: (row) =>
+      // Частые действия — первыми: в компактном режиме остальные уходят в «ещё».
       rowActions([
         row.stopped
           ? { icon: PlayOutline, tip: t('services.startTip'), type: 'success', onClick: () => start(row) }
-          : { icon: PauseOutline, tip: t('services.stopTip'), type: 'warning', disabled: row.mode === 'global', onClick: () => stop(row) },
+          : { icon: PauseOutline, tip: t('services.stopTip'), type: 'warning', disabled: row.mode === 'global' || row.desired === 0, onClick: () => stop(row) },
         { icon: CloudDownloadOutline, tip: t('services.deployTip'), type: 'primary', onClick: () => deploy(row) },
         { icon: RefreshOutline, tip: t('services.redeployTip'), onClick: () => redeploy(row) },
+        { icon: DocumentTextOutline, tip: t('nav.logs'), onClick: () => goLogs(row) },
         { icon: ResizeOutline, tip: t('services.scaleTip'), disabled: row.mode === 'global', onClick: () => openScale(row) },
         { icon: PricetagOutline, tip: t('services.imageTip'), onClick: () => openImage(row) },
-        { icon: DocumentTextOutline, tip: t('nav.logs'), onClick: () => goLogs(row) },
         { icon: ArrowUndoOutline, tip: t('services.rollbackTip'), onClick: () => rollback(row) },
         { icon: TrashOutline, tip: t('common.remove'), type: 'error', onClick: () => openRemove(row) },
-      ]),
+      ], allActions.value ? {} : { maxVisible: COMPACT_ACTIONS, moreLabel: t('common.more') }),
   },
 ])
 </script>
@@ -205,7 +250,12 @@ const columns = computed<DataTableColumns<ServiceInfo>>(() => [
       <n-data-table
         :columns="columns" :data="services" :loading="loading"
         size="small" :bordered="false" :row-key="(r: ServiceInfo) => r.id"
-      />
+        :scroll-x="tableMinWidth"
+      >
+        <template #empty>
+          <n-text depth="3">{{ t('services.empty') }}</n-text>
+        </template>
+      </n-data-table>
     </n-card>
 
     <!-- Scale -->
@@ -240,5 +290,14 @@ const columns = computed<DataTableColumns<ServiceInfo>>(() => [
 }
 :deep(.svc-link) {
   color: inherit;
+}
+/* Образ под именем сервиса — второстепенная строка в одну линию:
+   не влез — многоточие, полное имя — в подсказке */
+:deep(.sub) {
+  display: block;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

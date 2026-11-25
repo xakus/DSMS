@@ -82,15 +82,25 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 	if up, err := host.UptimeWithContext(ctx); err == nil {
 		snap.Sys.Uptime = up
 	}
-	// --- Контейнеры: per-container CPU/RAM из cgroups, топ-N (FR-02, NFR-2a) ---
+	// --- Контейнеры: per-container CPU/RAM из cgroups, топ-N (FR-02, NFR-2a),
+	//     плюс потребление по задачам Swarm с сетью (FR-04 3.4.7) ---
 	if c.ops != nil {
-		if cm, total, err := c.ops.ContainerMetrics(ctx, c.cfg.TopContainers); err == nil {
-			snap.Sys.Containers = total
-			snap.Containers = make([]Container, 0, len(cm))
-			for _, m := range cm {
+		if u, err := c.ops.ContainerMetrics(ctx, c.cfg.TopContainers); err == nil {
+			snap.Sys.Containers = u.Total
+			snap.Containers = make([]Container, 0, len(u.Top))
+			for _, m := range u.Top {
 				snap.Containers = append(snap.Containers, Container{
 					ID: m.ID, Name: m.Name, Service: m.Service,
 					CPUPct: m.CPUPct, MemUsed: m.MemUsed, MemLimit: m.MemLimit,
+				})
+			}
+			// Потребление каждой задачи Swarm — без отсечки топ-N (ТЗ 3.4.7).
+			snap.Tasks = make([]Task, 0, len(u.Tasks))
+			for _, m := range u.Tasks {
+				snap.Tasks = append(snap.Tasks, Task{
+					Task: m.Task, CPUCores: m.CPUCores,
+					MemUsed: m.MemUsed, MemLimit: m.MemLimit,
+					RxBps: m.RxBps, TxBps: m.TxBps,
 				})
 			}
 		}
@@ -133,18 +143,27 @@ func (c *Collector) collectDisk(ctx context.Context, now time.Time) []Disk {
 
 // collectNet возвращает скорости rx/tx по интерфейсам.
 func (c *Collector) collectNet(ctx context.Context, now time.Time) []Net {
-	counters, err := gnet.IOCountersWithContext(ctx, true)
+	// Счётчики сетевого пространства НОДЫ, а не контейнера агента
+	// (см. netifaces.go): gnet.IOCounters прочитал бы $HOST_PROC/net/dev,
+	// а это ссылка на self — интерфейсы самого агента.
+	counters, err := gnet.IOCountersByFileWithContext(ctx, true, hostNetDevPath())
 	if err != nil {
 		return nil
 	}
 	dt := now.Sub(c.prevTime).Seconds()
 
+	names := make([]string, 0, len(counters))
+	for _, s := range counters {
+		names = append(names, s.Name)
+	}
+	uplinks := uplinkIfaces(names, hostSysBase())
+
 	cur := make(map[string]gnet.IOCountersStat, len(counters))
-	out := make([]Net, 0, len(counters))
+	out := make([]Net, 0, len(uplinks))
 	for _, s := range counters {
 		cur[s.Name] = s
-		if s.Name == "lo" {
-			continue // loopback не интересен
+		if !uplinks[s.Name] {
+			continue // loopback, мосты и veth — не трафик ноды
 		}
 		n := Net{Iface: s.Name, Errors: s.Errin + s.Errout, Drops: s.Dropin + s.Dropout}
 		if c.prevNet != nil && dt > 0 {

@@ -58,6 +58,18 @@ type Container struct {
 	MemLimit uint64  `json:"mem_limit"`
 }
 
+// Task — потребление одной задачи Swarm (FR-04 3.4.7). В отличие от
+// Container шлётся по всем задачам ноды: по нему панель считает CPU, RAM и
+// сеть сервиса. Панель держит собственную копию этого типа.
+type Task struct {
+	Task     string  `json:"task"`      // ID задачи Swarm
+	CPUCores float64 `json:"cpu_cores"` // занято ядер (0.35 = 35% одного ядра)
+	MemUsed  uint64  `json:"mem_used"`  // байты, без неактивного файлового кэша
+	MemLimit uint64  `json:"mem_limit"` // байты; 0 — без лимита
+	RxBps    uint64  `json:"rx_bps"`    // приём, байт/с
+	TxBps    uint64  `json:"tx_bps"`    // отдача, байт/с
+}
+
 // Snapshot — один батч метрик (POST /api/v1/ingest).
 type Snapshot struct {
 	NodeID     string      `json:"node_id"`
@@ -69,4 +81,5 @@ type Snapshot struct {
 	Net        []Net       `json:"net"`
 	Sys        Sys         `json:"sys"`
 	Containers []Container `json:"containers,omitempty"`
+	Tasks      []Task      `json:"tasks,omitempty"`
 }

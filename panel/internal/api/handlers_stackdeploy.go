@@ -334,6 +334,12 @@ func (h *handlers) applyStack(ctx context.Context, stack string, conv *stackspec
 				res.Failed = append(res.Failed, stackFail{svc.Name, err.Error()})
 			} else {
 				res.Updated = append(res.Updated, svc.Name)
+				// Файл вернул сервису реплики — он больше не «остановлен
+				// панелью». Устаревшая запись позже выдала бы сервис с 0
+				// реплик за остановленный и «вернула» бы ему старое число.
+				if rep := svc.Spec.Mode.Replicated; rep == nil || rep.Replicas == nil || *rep.Replicas > 0 {
+					_ = h.Store.DeleteServiceState(cur.ID)
+				}
 			}
 			continue
 		}
@@ -457,8 +463,8 @@ func (h *handlers) stackCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(req.Name)
-	if name == "" || strings.ContainsAny(name, " \t/") || req.ComposeYAML == "" {
-		writeErr(w, http.StatusBadRequest, "valid name and compose_yaml required")
+	if req.ComposeYAML == "" {
+		writeErr(w, http.StatusBadRequest, "compose_yaml required")
 		return
 	}
 	h.deployAndStore(w, r, name, req)
@@ -481,6 +487,13 @@ func (h *handlers) stackUpdate(w http.ResponseWriter, r *http.Request) {
 // deployAndStore — общий путь create/update: конвертация → шифрование env →
 // сохранение исходника → разворачивание → audit → сводка.
 func (h *handlers) deployAndStore(w http.ResponseWriter, r *http.Request, name string, req stackDeployReq) {
+	// Имя проверяем ДО сохранения исходника (ТЗ 3.14.13): с именем вроде
+	// «a?b» Docker не создаст ни одного сервиса, а запись стека осталась бы
+	// в БД и в списке.
+	if !validStackName(name) {
+		writeErr(w, http.StatusBadRequest, "invalid stack name")
+		return
+	}
 	conv, err := buildStack(name, req.ComposeYAML, req.DotEnv, req.EnvVars)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())

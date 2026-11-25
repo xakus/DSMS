@@ -1,25 +1,51 @@
 <script setup lang="ts">
-// Стеки (FR-08): список с агрегированным статусом,
-// redeploy/remove стека целиком (двойное подтверждение имени).
-import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
+// Стеки (FR-08): список с агрегированным статусом и потреблением,
+// действия над стеком целиком — остановить, запустить, деплой, передеплой,
+// удаление (двойное подтверждение имени).
+import { computed, h, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NCard, NDataTable, NTag, NModal, NInput, NButton, NIcon, NSpace, useMessage, useDialog } from 'naive-ui'
+import { NCard, NDataTable, NTag, NButton, NIcon, NFlex } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import {
   RefreshOutline, TrashOutline, CloudDownloadOutline, DocumentTextOutline, AddOutline,
+  PlayOutline, PauseOutline,
 } from '@vicons/ionicons5'
 import AppLayout from '../components/AppLayout.vue'
 import StackDeployModal from '../components/StackDeployModal.vue'
+import StackRemoveModal from '../components/StackRemoveModal.vue'
 import { rowActions } from '../utils/actions'
-import { api, ApiError } from '../api/client'
+import { usageColumns, USAGE_COLS_WIDTH } from '../utils/usage'
+import { stackStatus } from '../utils/stackOps'
+import { api } from '../api/client'
+import { usePolling } from '../composables/usePolling'
+import { useStackActions } from '../composables/useStackActions'
+import { useMediaQuery } from '../composables/useMediaQuery'
 import type { StackInfo } from '../types'
 
+/** Псевдо-стек для сервисов без стека: действий над ним нет (имя задаёт сервер). */
+const NO_STACK = '(no stack)'
+
+/**
+ * Ширины колонок, px. Действий шесть: 6·28 + 5·6 + 24 (поля ячейки) = 222.
+ * Вместе с потреблением таблица укладывается в 1280 px без прокрутки.
+ */
+const COL = { name: 160, services: 100, replicas: 130, actions: 225 } as const
+
+/** Минимальная ширина таблицы: уже — прокрутка внутри карточки, а не страницы. */
+const TABLE_MIN_WIDTH = COL.name + COL.services + COL.replicas + USAGE_COLS_WIDTH + COL.actions
+
+/** С какой ширины экрана колонка действий закрепляется справа. */
+const PIN_ACTIONS_QUERY = '(min-width: 1024px)'
+
 const { t } = useI18n()
-const message = useMessage()
-const dialog = useDialog()
 
 const stacks = ref<StackInfo[]>([])
-const loading = ref(false)
+const { loading, refresh } = usePolling(async () => {
+  stacks.value = await api<StackInfo[]>('/stacks')
+})
+const actions = useStackActions(refresh)
+const pinActions = useMediaQuery(PIN_ACTIONS_QUERY)
 
 // Модал деплоя из файла (FR-14): editName=null — новый стек, иначе правка.
 const deployShow = ref(false)
@@ -33,129 +59,75 @@ function openDeployEdit(stack: StackInfo) {
   deployShow.value = true
 }
 
-// Модал удаления стека с вводом имени (3.8.3)
+// Удаление стека с вводом имени (3.8.3)
 const removeTarget = ref<StackInfo | null>(null)
-const removeConfirmName = ref('')
-
-async function load() {
-  loading.value = true
-  try {
-    stacks.value = await api<StackInfo[]>('/stacks')
-  } catch {
-    message.error(t('common.loadFailed'))
-  } finally {
-    loading.value = false
-  }
-}
-
-// Список стеков обновляется на фиксированном интервале.
-let timer: number | null = null
-onMounted(() => {
-  load()
-  timer = window.setInterval(load, 10000)
-})
-onBeforeUnmount(() => {
-  if (timer) window.clearInterval(timer)
-})
-
-function redeploy(stack: StackInfo) {
-  dialog.info({
-    title: t('stacks.redeployConfirm', { name: stack.name }),
-    positiveText: t('common.confirm'),
-    negativeText: t('common.cancel'),
-    onPositiveClick: async () => {
-      try {
-        await api(`/stacks/${stack.name}/redeploy`, { method: 'POST' })
-        message.success('OK')
-        await load()
-      } catch (e) {
-        message.error(e instanceof ApiError ? e.message : 'error')
-      }
-    },
-  })
-}
-
-// Деплой всего стека: каждому сервису тянет свежий образ по тегу (в отличие
-// от redeploy, который перезапускает те же digest'ы). Деплой стека на бэке —
-// длинная последовательная операция, поэтому окно НЕ держим в loading:
-// закрываем сразу (onPositiveClick без Promise), прогресс — тостом. Иначе
-// окно «висит», юзер жмёт повторно и плодит лишние задачи на каждом сервисе.
-function deploy(stack: StackInfo) {
-  dialog.info({
-    title: t('stacks.deployConfirm', { name: stack.name }),
-    content: t('stacks.deployHint'),
-    positiveText: t('common.confirm'),
-    negativeText: t('common.cancel'),
-    onPositiveClick: () => { runDeploy(stack) },
-  })
-}
-
-// Фоновый деплой стека: запускается из onPositiveClick без ожидания,
-// результат сообщается тостом, список обновляется по завершении.
-async function runDeploy(stack: StackInfo) {
-  message.info(t('stacks.deployStarted'))
-  try {
-    await api(`/stacks/${stack.name}/deploy`, { method: 'POST' })
-    message.success('OK')
-    await load()
-  } catch (e) {
-    message.error(e instanceof ApiError ? e.message : 'error')
-  }
-}
-
-function openRemove(stack: StackInfo) {
-  removeTarget.value = stack
-  removeConfirmName.value = ''
-}
-async function applyRemove() {
-  const stack = removeTarget.value
-  if (!stack || removeConfirmName.value !== stack.name) return
+function applyRemove(name: string) {
   removeTarget.value = null
-  try {
-    await api(`/stacks/${stack.name}`, { method: 'DELETE' })
-    message.success('OK')
-    await load()
-  } catch (e) {
-    message.error(e instanceof ApiError ? e.message : 'error')
-  }
-}
-
-/** Агрегированный статус стека: зелёный/жёлтый/красный (3.8.1). */
-function stackType(s: StackInfo): 'success' | 'error' | 'warning' {
-  if (s.running >= s.desired && s.desired > 0) return 'success'
-  if (s.running === 0) return 'error'
-  return 'warning'
+  void actions.remove(name)
 }
 
 const columns = computed<DataTableColumns<StackInfo>>(() => [
   {
-    title: t('stacks.name'), key: 'name',
-    render: (row) => row.managed
-      ? h(NSpace, { align: 'center', size: 6, wrapItem: false },
-        { default: () => [
-          row.name,
-          h(NTag, { size: 'tiny', bordered: false, type: 'info' },
-            { default: () => t('stacks.fromFile') }),
-        ] })
-      : row.name,
+    title: t('stacks.name'), key: 'name', minWidth: COL.name,
+    render: (row) => {
+      // Псевдо-стек — просто подпись: страницы у него нет.
+      if (row.name === NO_STACK) return t('stacks.noStack')
+      const link = h(RouterLink, { to: { name: 'stack', params: { name: row.name } }, class: 'row-link' },
+        { default: () => row.name })
+      if (!row.managed) return link
+      return h(NFlex, { align: 'center', size: 8, wrap: false }, {
+        default: () => [
+          link,
+          h(NTag, { size: 'tiny', bordered: false, type: 'info' }, { default: () => t('stacks.fromFile') }),
+        ],
+      })
+    },
   },
-  { title: t('stacks.services'), key: 'services', width: 110 },
+  { title: t('stacks.services'), key: 'services', width: COL.services },
   {
-    title: t('services.replicas'), key: 'replicas', width: 120,
-    render: (row) => h(NTag, { size: 'small', bordered: false, type: stackType(row) },
-      { default: () => `${row.running}/${row.desired}` }),
+    title: t('services.replicas'), key: 'replicas', width: COL.replicas,
+    render: (row) => {
+      const st = stackStatus(row)
+      const text = st.label ? t(st.label) : `${row.running}/${row.desired}`
+      const tag = h(NTag, { size: 'small', bordered: false, type: st.type }, { default: () => text })
+      // Остановлена только часть стека (остальное работает, например
+      // global-сервисы): числа зелёные, но об остановленных надо сказать.
+      if (st.label || row.stopped === 0) return tag
+      return h(NFlex, { vertical: true, size: 4, align: 'flex-start' }, {
+        default: () => [
+          tag,
+          h(NTag, { size: 'tiny', bordered: false }, { default: () => t('stacks.stoppedCount', { count: row.stopped }) }),
+        ],
+      })
+    },
   },
+  ...usageColumns<StackInfo>(t),
   {
-    title: t('services.actions'), key: 'actions', width: 150,
-    render: (row) => row.name === '(no stack)' ? null :
+    title: t('services.actions'), key: 'actions', width: COL.actions,
+    fixed: pinActions.value ? 'right' : undefined,
+    render: (row) => row.name === NO_STACK ? null :
       rowActions([
         // Только для managed-стеков: правка исходника + передеплой из файла.
         ...(row.managed
           ? [{ icon: DocumentTextOutline, tip: t('stacks.editFileTip'), onClick: () => openDeployEdit(row) }]
           : []),
-        { icon: CloudDownloadOutline, tip: t('stacks.deployTip'), type: 'primary' as const, onClick: () => deploy(row) },
-        { icon: RefreshOutline, tip: t('stacks.redeployTip'), onClick: () => redeploy(row) },
-        { icon: TrashOutline, tip: t('common.remove'), type: 'error' as const, onClick: () => openRemove(row) },
+        {
+          icon: PlayOutline, tip: t('stacks.startTip'), type: 'success' as const,
+          disabled: row.stopped === 0, onClick: () => { void actions.start(row.name) },
+        },
+        {
+          icon: PauseOutline, tip: t('stacks.stopTip'), type: 'warning' as const,
+          disabled: row.stoppable === 0, onClick: () => actions.stop(row.name),
+        },
+        {
+          icon: CloudDownloadOutline, tip: t('stacks.deployTip'), type: 'primary' as const,
+          disabled: row.services === 0, onClick: () => actions.deploy(row.name),
+        },
+        {
+          icon: RefreshOutline, tip: t('stacks.redeployTip'),
+          disabled: row.services === 0, onClick: () => actions.redeploy(row.name),
+        },
+        { icon: TrashOutline, tip: t('common.remove'), type: 'error' as const, onClick: () => { removeTarget.value = row } },
       ]),
   },
 ])
@@ -173,21 +145,30 @@ const columns = computed<DataTableColumns<StackInfo>>(() => [
       <n-data-table
         :columns="columns" :data="stacks" :loading="loading"
         size="small" :bordered="false" :row-key="(r: StackInfo) => r.name"
-      />
+        :scroll-x="TABLE_MIN_WIDTH"
+      >
+        <template #empty>
+          <n-flex vertical align="center" :size="12">
+            <span>{{ t('stacks.empty') }}</span>
+            <n-button size="small" type="primary" @click="openDeployNew">{{ t('stackDeploy.newButton') }}</n-button>
+          </n-flex>
+        </template>
+      </n-data-table>
     </n-card>
 
     <!-- Деплой/правка стека из файла (FR-14) -->
     <StackDeployModal
-      v-model:show="deployShow" :edit-name="deployEditName" @deployed="load"
+      v-model:show="deployShow" :edit-name="deployEditName" @deployed="refresh"
     />
 
-    <!-- Remove stack: ввод имени (3.8.3) -->
-    <n-modal :show="!!removeTarget" preset="dialog" type="error" :title="t('stacks.removeTitle')"
-             :positive-text="t('common.remove')" :negative-text="t('common.cancel')"
-             :positive-button-props="{ disabled: removeConfirmName !== removeTarget?.name, type: 'error' }"
-             @positive-click="applyRemove" @negative-click="removeTarget = null" @close="removeTarget = null">
-      <p>{{ t('stacks.removeHint', { name: removeTarget?.name, count: removeTarget?.services }) }}</p>
-      <n-input v-model:value="removeConfirmName" :placeholder="removeTarget?.name" />
-    </n-modal>
+    <!-- Удаление стека: ввод имени (3.8.3) -->
+    <StackRemoveModal :stack="removeTarget" @close="removeTarget = null" @confirm="applyRemove" />
   </AppLayout>
 </template>
+
+<style scoped>
+/* Имя стека — ссылка на его страницу, цветом текста (как имена сервисов) */
+:deep(.row-link) {
+  color: inherit;
+}
+</style>

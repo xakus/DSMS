@@ -4,7 +4,7 @@
 // ошибка тут не роняет панель, а тихо показывает неверную цифру, по которой
 // принимают решения («на диске 900 GiB свободно» вместо 900 MiB).
 import { describe, it, expect } from 'vitest'
-import { fmtBytes, fmtBps, fmtPct, fmtUptime } from './format'
+import { fmtBytes, fmtBps, fmtPct, fmtUptime, fmtCores, fmtMem, fmtDuration, shortImageName } from './format'
 
 describe('fmtBytes', () => {
   it('переводит в подходящую единицу', () => {
@@ -57,5 +57,57 @@ describe('fmtUptime', () => {
   it('нулевой и отсутствующий аптайм — прочерк', () => {
     expect(fmtUptime(0)).toBe('—')
     expect(fmtUptime(undefined)).toBe('—')
+  })
+})
+
+describe('fmtCores', () => {
+  it('ядра → проценты одного ядра, как в docker stats', () => {
+    expect(fmtCores(0)).toBe('0.0%')
+    expect(fmtCores(0.35)).toBe('35.0%')
+    expect(fmtCores(0.999)).toBe('99.9%')
+    expect(fmtCores(1.5)).toBe('150%')
+  })
+  it('нет данных — прочерк, а не 0% (сервис не «простаивает», он не измерен)', () => {
+    expect(fmtCores(undefined)).toBe('—')
+    expect(fmtCores(null)).toBe('—')
+    expect(fmtCores(NaN)).toBe('—')
+  })
+})
+
+describe('fmtMem', () => {
+  it('с лимитом — «занято / лимит»', () => {
+    expect(fmtMem(256 * 1024 ** 2, 512 * 1024 ** 2)).toBe('256 MiB / 512 MiB')
+  })
+  it('лимит 0 = «лимита нет», а не «лимит ноль»', () => {
+    expect(fmtMem(256 * 1024 ** 2, 0)).toBe('256 MiB')
+    expect(fmtMem(256 * 1024 ** 2)).toBe('256 MiB')
+  })
+  it('нет данных — прочерк', () => {
+    expect(fmtMem(undefined, 512)).toBe('—')
+    expect(fmtMem(null)).toBe('—')
+  })
+})
+
+describe('fmtDuration', () => {
+  it('секунды и минуты', () => {
+    expect(fmtDuration(0)).toBe('0s')
+    expect(fmtDuration(0.5)).toBe('0.5s')
+    expect(fmtDuration(5)).toBe('5s')
+    expect(fmtDuration(60)).toBe('1m')
+    expect(fmtDuration(90)).toBe('1m 30s')
+  })
+  it('нет данных — прочерк', () => {
+    expect(fmtDuration(undefined)).toBe('—')
+  })
+})
+
+describe('shortImageName', () => {
+  it('убирает реестр и путь, оставляет имя с тегом', () => {
+    expect(shortImageName('registry.example.com:5000/shad/app:1.4.2')).toBe('app:1.4.2')
+    expect(shortImageName('ghcr.io/xakus/dsms-panel:latest')).toBe('dsms-panel:latest')
+  })
+  it('короткое имя не трогает', () => {
+    expect(shortImageName('nginx:alpine')).toBe('nginx:alpine')
+    expect(shortImageName('')).toBe('')
   })
 })

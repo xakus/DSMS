@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 
@@ -30,6 +32,14 @@ type fakeDocker struct {
 	logLines   []string     // stdcopy-payload'ы для ServiceLogsSnapshot
 	// emptyAboveTail>0 имитирует баг docker: при tail больше порога поток пуст.
 	emptyAboveTail int
+	// failUpdate / failRemove — ID сервисов, на которых Docker отвечает
+	// ошибкой (проверка частичного сбоя групповых операций, 3.8.6).
+	failUpdate map[string]bool
+	failRemove map[string]bool
+	// goneNetworks — ID сетей, которые видны в списке, но при удалении
+	// отвечают «не найдено» (так ведёт себя overlay-сеть сразу после
+	// удаления: Swarm её уже убрал, а нода ещё показывает).
+	goneNetworks map[string]bool
 }
 
 // ServiceLogsSnapshot отдаёт заранее заданные строки в stdcopy-обёртке
@@ -119,6 +129,9 @@ type lastUpdate struct {
 
 func (f *fakeDocker) ServiceUpdate(ctx context.Context, id string, version swarm.Version,
 	spec swarm.ServiceSpec, registryAuth, rollback string) ([]string, error) {
+	if f.failUpdate[id] {
+		return nil, errors.New("update out of sequence")
+	}
 	for i := range f.services {
 		if f.services[i].ID == id {
 			f.services[i].Spec = spec
@@ -143,6 +156,9 @@ func (f *fakeDocker) ServiceCreate(ctx context.Context, spec swarm.ServiceSpec, 
 }
 
 func (f *fakeDocker) ServiceRemove(ctx context.Context, id string) error {
+	if f.failRemove[id] {
+		return errors.New("service is busy")
+	}
 	for i := range f.services {
 		if f.services[i].ID == id {
 			f.services = append(f.services[:i], f.services[i+1:]...)
@@ -239,6 +255,9 @@ func (f *fakeDocker) NetworkCreate(ctx context.Context, name string, o dockerapi
 }
 
 func (f *fakeDocker) NetworkRemove(ctx context.Context, id string) error {
+	if f.goneNetworks[id] {
+		return fmt.Errorf("network %s: %w", id, cerrdefs.ErrNotFound)
+	}
 	for i := range f.networks {
 		if f.networks[i].ID == id {
 			f.networks = append(f.networks[:i], f.networks[i+1:]...)

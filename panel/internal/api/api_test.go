@@ -51,6 +51,8 @@ func newTestServer(t *testing.T, docker *fakeDocker) (*httptest.Server, *metrics
 		Hub:      ws.NewHub(),
 		Sessions: auth.NewManager(db, cfg.SessionTTL),
 		Crypto:   box,
+		// Метрики задач (FR-04 3.4.7): наполняются тестами через /ingest.
+		TaskStats: metrics.NewTaskStats(metrics.TaskStatsTTL),
 	}))
 	t.Cleanup(srv.Close)
 	return srv, buf

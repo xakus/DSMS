@@ -69,6 +69,16 @@ func (cl *Client) ServiceTasks(ctx context.Context, serviceID string) ([]swarm.T
 	})
 }
 
+// TaskState возвращает текущее состояние задачи Swarm (running, failed,
+// shutdown…). Нужна, чтобы отличить падение задачи от штатной остановки (FR-12).
+func (cl *Client) TaskState(ctx context.Context, taskID string) (swarm.TaskState, error) {
+	t, _, err := cl.c.TaskInspectWithRaw(ctx, taskID)
+	if err != nil {
+		return "", err
+	}
+	return t.Status.State, nil
+}
+
 // Tasks возвращает все задачи кластера (для агрегации running/desired).
 func (cl *Client) Tasks(ctx context.Context) ([]swarm.Task, error) {
 	return cl.c.TaskList(ctx, swarm.TaskListOptions{})

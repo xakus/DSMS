@@ -79,6 +79,9 @@ type Deps struct {
 	AgentClient *agentclient.Client
 	// Alerts — движок алертов (FR-12); nil в тестах, где он не нужен.
 	Alerts *alerts.Engine
+	// TaskStats — последнее потребление задач Swarm (FR-04 3.4.7);
+	// nil — метрики задач отключены, сервисы показываются без цифр.
+	TaskStats *metrics.TaskStats
 }
 
 // NewRouter собирает chi-роутер: API + встроенная SPA.
@@ -141,6 +144,8 @@ func NewRouter(d Deps) http.Handler {
 			// --- стеки (FR-08) ---
 			r.Get("/stacks", h.stacks)
 			r.Get("/stacks/{name}", h.stackDetail)
+			r.Post("/stacks/{name}/stop", h.stackStop)
+			r.Post("/stacks/{name}/start", h.stackStart)
 			r.Post("/stacks/{name}/redeploy", h.stackRedeploy)
 			r.Post("/stacks/{name}/deploy", h.stackDeploy)
 			r.Delete("/stacks/{name}", h.stackRemove)

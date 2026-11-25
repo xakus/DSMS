@@ -208,3 +208,62 @@ func TestConvertPortHostMode(t *testing.T) {
 		t.Fatalf("порт mode:host неверен: %+v", p)
 	}
 }
+
+// TestConvertNetworkAliases: каждому сервису на каждой сети добавляется
+// псевдоним — короткое имя из файла, как у `docker stack deploy`. Без него
+// «app» не находит «db» по имени. Найдено живой проверкой 25.11.2026:
+// wget http://web из соседнего сервиса падал с «bad address 'web'».
+func TestConvertNetworkAliases(t *testing.T) {
+	const y = `
+services:
+  web:
+    image: nginx:1.27
+    networks:
+      front:
+        aliases: [ site, web ]
+      back: {}
+  db:
+    image: postgres:17
+  edge:
+    image: nginx:1.27
+    networks: [ hostnet ]
+networks:
+  front: {}
+  back: {}
+  hostnet:
+    external: true
+    name: host
+`
+	proj, err := Load("app", []byte(y), nil)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	conv, err := Convert("app", proj, nil)
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	aliases := map[string]map[string][]string{} // сервис → сеть → псевдонимы
+	for _, s := range conv.Services {
+		aliases[s.Name] = map[string][]string{}
+		for _, n := range s.Spec.TaskTemplate.Networks {
+			aliases[s.Name][n.Target] = n.Aliases
+		}
+	}
+
+	// Сеть без явных псевдонимов — только короткое имя.
+	if got := aliases["app_web"]["app_back"]; len(got) != 1 || got[0] != "web" {
+		t.Fatalf("web@back: want [web], got %v", got)
+	}
+	// Явные псевдонимы сохраняются, имя сервиса не дублируется.
+	if got := aliases["app_web"]["app_front"]; len(got) != 2 || got[0] != "site" || got[1] != "web" {
+		t.Fatalf("web@front: want [site web], got %v", got)
+	}
+	// Сервис без networks сидит в default — и там тоже находится по имени.
+	if got := aliases["app_db"]["app_default"]; len(got) != 1 || got[0] != "db" {
+		t.Fatalf("db@default: want [db], got %v", got)
+	}
+	// Встроенная сеть host псевдонимов не принимает.
+	if got := aliases["app_edge"]["host"]; len(got) != 0 {
+		t.Fatalf("edge@host: aliases must be empty, got %v", got)
+	}
+}

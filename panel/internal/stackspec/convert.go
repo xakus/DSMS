@@ -259,7 +259,7 @@ func toServiceSpec(stack, key string, s types.ServiceConfig, p *types.Project,
 		Annotations:  swarm.Annotations{Name: full, Labels: serviceLabels},
 		TaskTemplate: swarm.TaskSpec{ContainerSpec: cs},
 	}
-	spec.TaskTemplate.Networks = serviceNetworks(s.Networks, ctx.networks)
+	spec.TaskTemplate.Networks = serviceNetworks(s.Name, s.Networks, ctx.networks)
 	if drv := logDriver(s); drv != nil {
 		spec.TaskTemplate.LogDriver = drv
 	}
@@ -397,8 +397,20 @@ func extraHosts(h types.HostsList) []string {
 	return hosts
 }
 
+// predefinedNetworks — встроенные сети Docker. Псевдонимы (aliases) в них не
+// поддерживаются: привязка с alias к сети host отклоняется демоном.
+var predefinedNetworks = map[string]bool{"host": true, "bridge": true, "none": true}
+
 // serviceNetworks строит привязки сервиса к сетям по реальным именам.
-func serviceNetworks(nets map[string]*types.ServiceNetworkConfig, netName map[string]string) []swarm.NetworkAttachmentConfig {
+//
+// К псевдонимам из файла добавляется короткое имя сервиса (svcName) — так
+// делает `docker stack deploy`. Без него сервисы стека не находят друг друга
+// по именам из compose-файла: в DNS сети есть только полное имя
+// «<стек>_<сервис>», и обращение приложения к «db» или «redis» падает с
+// «bad address».
+func serviceNetworks(svcName string, nets map[string]*types.ServiceNetworkConfig,
+	netName map[string]string) []swarm.NetworkAttachmentConfig {
+
 	if len(nets) == 0 {
 		return nil
 	}
@@ -415,11 +427,25 @@ func serviceNetworks(nets map[string]*types.ServiceNetworkConfig, netName map[st
 		}
 		att := swarm.NetworkAttachmentConfig{Target: target}
 		if cfg := nets[k]; cfg != nil && len(cfg.Aliases) > 0 {
-			att.Aliases = cfg.Aliases
+			// Копия: дописываем в свой срез, а не в данные разобранного файла.
+			att.Aliases = append([]string{}, cfg.Aliases...)
+		}
+		if !predefinedNetworks[target] && !containsString(att.Aliases, svcName) {
+			att.Aliases = append(att.Aliases, svcName)
 		}
 		out = append(out, att)
 	}
 	return out
+}
+
+// containsString — есть ли строка в срезе.
+func containsString(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 // resourceReq конвертирует limits/reservations. nil, если ничего не задано.

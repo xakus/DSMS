@@ -12,6 +12,7 @@ export const router = createRouter({
     { path: '/services', name: 'services', component: () => import('../views/ServicesView.vue') },
     { path: '/services/:id', name: 'service', component: () => import('../views/ServiceDetailView.vue') },
     { path: '/stacks', name: 'stacks', component: () => import('../views/StacksView.vue') },
+    { path: '/stacks/:name', name: 'stack', component: () => import('../views/StackDetailView.vue') },
     { path: '/logs', name: 'logs', component: () => import('../views/LogsView.vue') },
     { path: '/events', name: 'events', component: () => import('../views/EventsView.vue') },
     { path: '/resources', name: 'resources', component: () => import('../views/ResourcesView.vue') },
