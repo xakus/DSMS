@@ -147,6 +147,8 @@ docker stack deploy -c dsms.yml dsms
 
 Требования: Docker Engine ≥ 24.x со Swarm mode; образы multi-arch (amd64 + arm64), сборка в GitHub Actions.
 
+**Выпуск версии:** образы публикует только `release.yml` по git-тегу `v*` (пуш в `main` образов не даёт). Порядок: (1) дождаться зелёного CI; (2) `cd frontend && npm version X.Y.Z --no-git-tag-version`; (3) раздел `[X.Y.Z]` в `CHANGELOG.md`; (4) **оба** образа в `dsms.yml` → `X.Y.Z` (точный тег, не `latest`; панель и агент всегда одной версии); (5) коммит, аннотированный тег `vX.Y.Z`, пуш коммита и тега. Тег образа — без буквы `v`.
+
 ## Порядок работ
 
 План разбит на 8 этапов (раздел 9 ТЗ), ~7–8 недель. MVP — этапы 1–4 (skeleton+auth+SPA → dashboard/ноды → сервисы+стеки → логи/события/audit), ~4 недели. Дальше: Resources (Secrets/Configs/Networks/Volumes + prune, этап 5), алерты (этап 6), история метрик + Settings (этап 7), полировка/безопасность/CI (этап 8). Реализуй в этом порядке: зависимости идут снизу вверх (agent+ingest → метрики по WS → управление объектами).

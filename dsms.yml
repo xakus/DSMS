@@ -12,7 +12,10 @@ version: "3.8"
 
 services:
   panel:
-    image: ghcr.io/xakus/dsms-panel:latest
+    # Версия 2.2.0 (выпуск 25.11.2026). Закреплена точным тегом, а не latest:
+    # видно, что реально работает, и откат — это просто прежняя цифра.
+    # Панель и агент — ВСЕГДА одной версии (метрики задач считает агент).
+    image: ghcr.io/xakus/dsms-panel:2.2.0
     networks: [dsms]
     volumes:
       # Доступ к Docker Engine API — panel живёт только на manager-ноде
@@ -39,7 +42,8 @@ services:
       restart_policy: {condition: on-failure}
 
   agent:
-    image: ghcr.io/xakus/dsms-agent:latest
+    # Та же версия, что у панели (см. комментарий выше).
+    image: ghcr.io/xakus/dsms-agent:2.2.0
     networks: [dsms]
     volumes:
       # Хост-ресурсы read-only для gopsutil (разд. 2.3)

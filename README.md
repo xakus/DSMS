@@ -146,10 +146,23 @@ server {
 
 ```bash
 # 1. Снять резервную копию (Settings → Резервная копия)
-# 2. Обновить образы
-docker service update --image ghcr.io/xakus/dsms-panel:X.Y.Z dsms_panel   # тег образа без «v»: git-тег v2.1.0 → образ 2.1.0
+# 2. В dsms.yml поставить новую версию ОБОИМ образам (тег без «v»:
+#    git-тег v2.2.0 → образ 2.2.0) и выкатить — панель и агенты обновятся вместе:
+docker stack deploy -c dsms.yml dsms
+
+# То же без файла, по одному сервису:
+docker service update --image ghcr.io/xakus/dsms-panel:X.Y.Z dsms_panel
 docker service update --image ghcr.io/xakus/dsms-agent:X.Y.Z dsms_agent
+
+# 3. Проверить, что версия действительно новая:
+docker service ls --format '{{.Name}} {{.Image}}' | grep dsms_
+docker service logs dsms_panel 2>&1 | grep '"dsms panel starting"' | tail -1
+docker service logs dsms_agent 2>&1 | grep '"dsms agent starting"' | tail -1
 ```
+
+Панель и агент должны быть **одной версии**: потребление сервисов (CPU, RAM,
+сеть) считает агент, со старым агентом в таблице сервисов будут прочерки.
+Версия панели видна в шапке интерфейса и в `/api/v1/healthz`.
 
 Схема БД версионируется и мигрирует при старте сама — ручных SQL не нужно.
 Панель **откажется стартовать на базе от более новой сборки** (защита от отката):
